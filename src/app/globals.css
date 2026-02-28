@@ -1,0 +1,136 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-inter), "Inter", "Montserrat", sans-serif;
+
+  --color-nebius-bg: #001A2B;
+  --color-nebius-surface: #0D1117;
+  --color-nebius-border: #1F2937;
+
+  --color-brand-primary: #6B4EFF;
+  --color-brand-success: #E0FF4F;
+  --color-brand-glow: rgba(224, 255, 79, 0.15);
+}
+
+@layer base {
+  body {
+    background-color: var(--color-nebius-bg);
+    color: #e5e7eb; /* tailwind gray-200 */
+    font-family: var(--font-sans);
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+  }
+}
+
+@layer components {
+  /* Button Lift Micro-interaction */
+  .btn-lift {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .btn-lift:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+
+  /* The "Decision Card" (Glassmorphism) */
+  .decision-card {
+    background: rgba(13, 17, 23, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--color-nebius-border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    transition: all 0.3s ease;
+  }
+
+  .decision-card.recommended {
+    border-color: var(--color-brand-success); /* Neon Green Glow */
+    box-shadow: 0 0 15px var(--color-brand-glow);
+  }
+
+  /* The "Weighted Slider" Custom Styles */
+  .custom-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 8px;
+    background: var(--color-nebius-border);
+    outline: none;
+    border-radius: 4px;
+    transition: background 0.2s;
+  }
+
+  .custom-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--color-brand-primary);
+    cursor: pointer;
+    box-shadow: 0 0 5px rgba(107, 78, 255, 0.5);
+    transition: transform 0.2s ease;
+  }
+
+  .custom-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.1);
+  }
+
+  .custom-slider::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--color-brand-primary);
+    cursor: pointer;
+    box-shadow: 0 0 5px rgba(107, 78, 255, 0.5);
+    transition: transform 0.2s ease;
+    border: none;
+  }
+
+  .custom-slider::-moz-range-thumb:hover {
+    transform: scale(1.1);
+  }
+
+  /* Status Indicators */
+  .status-pulse {
+    position: relative;
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background-color: var(--color-brand-success);
+    border-radius: 50%;
+  }
+
+  .status-pulse::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background-color: var(--color-brand-success);
+    animation: pulse 2s infinite ease-out;
+    opacity: 0.6;
+  }
+
+  @keyframes pulse {
+    0% { transform: scale(1); opacity: 0.6; }
+    100% { transform: scale(2.5); opacity: 0; }
+  }
+
+  /* Empty State Dropzone */
+  .empty-dropzone {
+    border: 2px dashed var(--color-nebius-border);
+    border-radius: 12px;
+    padding: 3rem;
+    text-align: center;
+    background: rgba(13, 17, 23, 0.4);
+    transition: all 0.3s ease;
+  }
+
+  .empty-dropzone:hover {
+    border-color: var(--color-brand-primary);
+    background: rgba(13, 17, 23, 0.6);
+  }
+}
