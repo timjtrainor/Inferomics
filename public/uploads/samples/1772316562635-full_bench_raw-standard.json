@@ -1,0 +1,106 @@
+{
+  "sampleSize": 383,
+  "totalRecords": 68871,
+  "sample": [
+    {
+      "prompt": "The stigma is justified. I dont care how you got it, it's still disgusting.",
+      "completion": "disgust"
+    },
+    {
+      "prompt": "That's such a lazy way of looking at things.",
+      "completion": "annoyance"
+    },
+    {
+      "prompt": "The poor dude.....pray for him.",
+      "completion": "caring"
+    },
+    {
+      "prompt": "Fucking fuck! 2 (or more) sets of fucking socks in fucking sandals.",
+      "completion": "disgust"
+    },
+    {
+      "prompt": "[NAME] the people must be warned.",
+      "completion": "neutral"
+    },
+    {
+      "prompt": "No youre a cunt",
+      "completion": "anger"
+    },
+    {
+      "prompt": "No tweets from [NAME] since 10:30pm EST... twelve hours ago at the time of this writing. Oh, he must be having a GREAT time.",
+      "completion": "admiration"
+    },
+    {
+      "prompt": "I love crows!!!!",
+      "completion": "love"
+    },
+    {
+      "prompt": "Calm down.",
+      "completion": "annoyance"
+    },
+    {
+      "prompt": "“You’ll forfeit your lives then” -Winne the Pooh",
+      "completion": "neutral"
+    },
+    {
+      "prompt": "Of all the injustices in the world!",
+      "completion": "annoyance"
+    },
+    {
+      "prompt": "Bruh this the magic, we shouldn't have to have a big comeback",
+      "completion": "neutral"
+    },
+    {
+      "prompt": "Good demo",
+      "completion": "admiration"
+    },
+    {
+      "prompt": "i think u mean symfuhny lol",
+      "completion": "confusion"
+    },
+    {
+      "prompt": "I’m not gonna be writing you a paper check!",
+      "completion": "annoyance"
+    },
+    {
+      "prompt": "That means nothing beyond the fact that I couldn’t be asked arguing with you. It was a no contest essentially.",
+      "completion": "neutral"
+    },
+    {
+      "prompt": "I’d love to flatten [NAME] emotions.",
+      "completion": "neutral"
+    },
+    {
+      "prompt": "Me thinks this crosses the line of dignity. Makes me sad. It’s one thing to expose things but another to mock it.",
+      "completion": "disappointment"
+    },
+    {
+      "prompt": "I don’t know but I think they at least have foil inside, I remember seeing you could hack one into an antenna.",
+      "completion": "optimism"
+    },
+    {
+      "prompt": "There's also the option of \"who cares? Ship and let ship\" but okay. ",
+      "completion": "caring"
+    },
+    {
+      "prompt": "This sub is becoming a “Gamers rise up” parody of itself. This is ridiculous.",
+      "completion": "annoyance"
+    },
+    {
+      "prompt": "Don't see how this video means I need sex? Also, this isn't my video. Try OP.",
+      "completion": "neutral"
+    },
+    {
+      "prompt": "Do you have any recommended places? A lot of the sites I’ve looked at want you to pay, kinda hard when your broke lol. ",
+      "completion": "fear"
+    },
+    {
+      "prompt": "yeah, but they think taking care is buying dinner and taking me on trips. I want money to spend on whatever I want.",
+      "completion": "neutral"
+    },
+    {
+      "prompt": "nice try balance team",
+      "completion": "admiration"
+    }
+  ]
+}

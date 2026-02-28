@@ -1,27 +1,43 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Settings, BarChart3, Clock, Zap, Database, ChevronDown, CheckCircle2 } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { useAppContext } from '@/context/AppContext';
+import { calculateCochran } from '@/lib/statistics';
 
 interface Dataset {
   id: string;
   name: string;
   createdAt: string;
   url: string;
-}
-
-interface SampledData {
-  sampleSize: number;
-  totalRecords: number;
-  sample: Record<string, unknown>[];
+  recordCount: number;
 }
 
 export default function InferonomicsPage() {
+  const {
+    selectedDatasetId,
+    setSelectedDatasetId,
+    accuracy,
+    setAccuracy,
+    sampledData,
+    setSampledData
+  } = useAppContext();
+
   const [datasets, setDatasets] = useState<Dataset[]>([]);
-  const [selectedDatasetId, setSelectedDatasetId] = useState<string>('');
-  const [accuracy, setAccuracy] = useState<string>('Standard');
   const [isSampling, setIsSampling] = useState(false);
-  const [sampledData, setSampledData] = useState<SampledData | null>(null);
+
+  // Derived state for the UI boxes
+  const selectedDataset = datasets.find((d: Dataset) => d.id === selectedDatasetId);
+
+  // Calculate scientific sample size for immediate feedback
+  const predictedSampleSize = useMemo(() => {
+    if (!selectedDataset) return 0;
+    const marginOfError = accuracy === 'High' ? 0.01 : accuracy === 'Standard' ? 0.05 : 0.10;
+    return calculateCochran(selectedDataset.recordCount, marginOfError);
+  }, [selectedDataset, accuracy]);
+
+  const isLocked = !!sampledData;
 
   useEffect(() => {
     fetch('/api/datasets')
@@ -33,7 +49,7 @@ export default function InferonomicsPage() {
   }, []);
 
   const handleSample = async () => {
-    if (!selectedDatasetId) return;
+    if (!selectedDatasetId || isLocked) return;
     setIsSampling(true);
     try {
       const res = await fetch('/api/inferomics/sample', {
@@ -83,10 +99,16 @@ export default function InferonomicsPage() {
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
 
         {/* Source Selection Panel */}
-        <div className="bg-[#0D1117] border border-[#1F2937] rounded-xl p-6">
-          <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <Database className="text-[#6B4EFF]" size={20} />
-            Data Source Selection
+        <div className={cn(
+          "bg-[#0D1117] border border-[#1F2937] rounded-xl p-6 transition-opacity",
+          isLocked && "opacity-75"
+        )}>
+          <h2 className="text-lg font-semibold text-white mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Database className="text-[#6B4EFF]" size={20} />
+              Data Source Selection
+            </div>
+            {isLocked && <span className="text-[10px] bg-[#6B4EFF]/20 text-[#6B4EFF] px-2 py-0.5 rounded border border-[#6B4EFF]/30 uppercase tracking-widest font-bold">Session Locked</span>}
           </h2>
 
           <div className="space-y-6">
@@ -94,9 +116,13 @@ export default function InferonomicsPage() {
               <label className="block text-sm font-medium text-gray-400 mb-2">Select Dataset (.jsonl)</label>
               <div className="relative">
                 <select
-                  className="w-full bg-[#1F2937] border border-[#374151] text-white pl-4 pr-10 py-2.5 rounded-lg appearance-none focus:outline-none focus:border-[#6B4EFF] transition-colors"
+                  className={cn(
+                    "w-full bg-[#1F2937] border border-[#374151] text-white pl-4 pr-10 py-2.5 rounded-lg appearance-none focus:outline-none focus:border-[#6B4EFF] transition-colors",
+                    isLocked && "cursor-not-allowed opacity-50 bg-[#0D1117]"
+                  )}
                   value={selectedDatasetId}
                   onChange={(e) => setSelectedDatasetId(e.target.value)}
+                  disabled={isLocked}
                 >
                   <option value="" disabled>Choose a dataset...</option>
                   {datasets.map(ds => (
@@ -114,10 +140,15 @@ export default function InferonomicsPage() {
                   <button
                     key={tier}
                     onClick={() => setAccuracy(tier)}
-                    className={`py-2 rounded-md text-sm font-medium border transition-colors ${accuracy === tier
-                      ? 'bg-[#6B4EFF]/10 border-[#6B4EFF] text-[#6B4EFF]'
-                      : 'bg-[#1F2937] border-[#374151] text-gray-400 hover:text-white hover:border-gray-500'
-                      }`}
+                    disabled={isLocked}
+                    className={cn(
+                      "py-2 rounded-md text-sm font-medium border transition-colors",
+                      accuracy === tier
+                        ? 'bg-[#6B4EFF]/10 border-[#6B4EFF] text-[#6B4EFF]'
+                        : 'bg-[#1F2937] border-[#374151] text-gray-400 hover:text-white hover:border-gray-500',
+                      isLocked && accuracy !== tier && "opacity-30 cursor-not-allowed",
+                      isLocked && accuracy === tier && "cursor-default"
+                    )}
                   >
                     {tier}
                     <span className="block text-xs opacity-70 mt-0.5">
@@ -130,48 +161,70 @@ export default function InferonomicsPage() {
 
             <button
               onClick={handleSample}
-              disabled={!selectedDatasetId || isSampling}
-              className="w-full bg-[#E0FF4F] hover:bg-[#d4f535] text-black px-4 py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 btn-lift shadow-lg shadow-[#E0FF4F]/10 disabled:opacity-50 transition-all"
+              disabled={!selectedDatasetId || isSampling || isLocked}
+              className={cn(
+                "w-full px-4 py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all",
+                isLocked
+                  ? "bg-[#1F2937] text-gray-500 border border-[#374151] cursor-default"
+                  : "bg-[#E0FF4F] hover:bg-[#d4f535] text-black btn-lift shadow-lg shadow-[#E0FF4F]/10 disabled:opacity-50"
+              )}
             >
-              {isSampling ? 'Processing...' : 'Generate Sample Data'}
+              {isSampling ? 'Processing...' : isLocked ? 'Sample Locked for Session' : 'Generate Sample Data'}
             </button>
           </div>
         </div>
 
         {/* Sampling Results Panel */}
-        <div className="bg-[#0D1117] border border-[#1F2937] rounded-xl p-6 flex flex-col justify-center relative overflow-hidden">
-          {!sampledData ? (
+        <div className="bg-[#0D1117] border border-[#1F2937] rounded-xl p-6 flex flex-col justify-center relative overflow-hidden min-h-[320px]">
+          {!selectedDatasetId ? (
             <div className="flex flex-col items-center justify-center text-center space-y-4 opacity-50">
               <div className="w-16 h-16 rounded-full border border-dashed border-gray-500 flex items-center justify-center">
                 <BarChart3 className="text-gray-500" size={24} />
               </div>
               <div>
-                <p className="text-gray-400 text-sm">No sample generated yet.</p>
-                <p className="text-gray-500 text-xs mt-1">Select a dataset and accuracy to begin.</p>
+                <p className="text-gray-400 text-sm">No dataset selected.</p>
+                <p className="text-gray-500 text-xs mt-1">Select a dataset and accuracy to see thresholds.</p>
               </div>
             </div>
           ) : (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col items-center text-center z-10">
-              <div className="w-16 h-16 rounded-full bg-[#E0FF4F]/10 flex items-center justify-center mb-4">
-                <CheckCircle2 className="text-[#E0FF4F] w-8 h-8" />
-              </div>
-              <h3 className="text-2xl font-bold text-white mb-1">Sample Generated</h3>
-              <p className="text-gray-400 mb-6">Cochran Formula applied based on {accuracy} accuracy</p>
-
-              <div className="grid grid-cols-2 gap-4 w-full">
-                <div className="bg-[#1F2937] rounded-lg p-4 border border-[#374151]">
-                  <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Total Population</p>
-                  <p className="text-2xl font-mono text-white">{sampledData.totalRecords.toLocaleString()}</p>
-                </div>
-                <div className="bg-[#1F2937] rounded-lg p-4 border border-[#6B4EFF]/30 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-16 h-16 bg-[#6B4EFF]/10 rounded-bl-full"></div>
-                  <p className="text-xs text-[#6B4EFF] uppercase tracking-wider mb-1 font-semibold">Sample Size</p>
-                  <p className="text-2xl font-mono text-white">{sampledData.sampleSize}</p>
-                </div>
+              <div className={cn(
+                "w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-colors",
+                sampledData ? "bg-[#E0FF4F]/10" : "bg-[#6B4EFF]/10"
+              )}>
+                {sampledData ? (
+                  <CheckCircle2 className="text-[#E0FF4F] w-8 h-8" />
+                ) : (
+                  <BarChart3 className="text-[#6B4EFF] w-8 h-8" />
+                )}
               </div>
 
-              <div className="mt-6 w-full text-left text-xs font-mono text-gray-500 bg-black/50 p-3 rounded overflow-hidden text-ellipsis whitespace-nowrap">
-                Sample preview: {JSON.stringify(sampledData.sample[0])}
+              <h3 className="text-2xl font-bold text-white mb-2">Sample Size</h3>
+              <p className="text-gray-400 mb-8 max-w-sm">
+                Sample size is mathematically optimized to ensure a{' '}
+                <span className="text-[#6B4EFF] font-semibold">
+                  {accuracy === 'High' ? '1%' : accuracy === 'Standard' ? '5%' : '10%'}
+                </span>{' '}
+                margin of error across the entire population.
+              </p>
+
+              <div className="w-full space-y-6">
+                <div className="grid grid-cols-2 gap-4 w-full">
+                  <div className="bg-[#1F2937] rounded-lg p-4 border border-[#374151]">
+                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Total Population</p>
+                    <p className="text-2xl font-mono text-white">
+                      {selectedDataset ? selectedDataset.recordCount.toLocaleString() : '...'}
+                    </p>
+                  </div>
+                  <div className="bg-[#1F2937] rounded-lg p-4 border border-[#6B4EFF]/30 relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-16 h-16 bg-[#6B4EFF]/10 rounded-bl-full"></div>
+                    <p className="text-xs text-[#6B4EFF] uppercase tracking-wider mb-1 font-semibold">Sample Size</p>
+                    <p className="text-2xl font-mono text-white">
+                      {sampledData ? sampledData.sampleSize : Math.min(predictedSampleSize, selectedDataset?.recordCount ?? 0)}
+                    </p>
+                  </div>
+                </div>
+
               </div>
             </div>
           )}
@@ -241,6 +294,6 @@ export default function InferonomicsPage() {
         </div>
       </div>
 
-    </div>
+    </div >
   );
 }

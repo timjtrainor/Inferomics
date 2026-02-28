@@ -12,6 +12,8 @@ export const metadata: Metadata = {
   description: "A decision-engine for AI unit economics.",
 };
 
+import { AppProvider } from "@/context/AppContext";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -20,13 +22,15 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} ${montserrat.variable} antialiased bg-[#001A2B] text-gray-200 min-h-screen flex flex-col`}>
-        <TopNav />
-        <div className="flex flex-1 flex-row">
-          <Sidebar />
-          <main className="flex-1 overflow-y-auto">
-            {children}
-          </main>
-        </div>
+        <AppProvider>
+          <TopNav />
+          <div className="flex flex-1 flex-row">
+            <Sidebar />
+            <main className="flex-1 overflow-y-auto">
+              {children}
+            </main>
+          </div>
+        </AppProvider>
       </body>
     </html>
   );
