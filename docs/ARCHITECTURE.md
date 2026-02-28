@@ -34,7 +34,7 @@ decisions live there. Do not use inline hex values that duplicate theme tokens.
 ```
 Browser
   └─► Next.js (Cloud Run container)
-        ├─► /inferonomics        → React UI (client component)
+        ├─► /Inferomics        → React UI (client component)
         └─► /api/recommend       → API Route → Firestore → scoring logic → JSON response
 ```
 

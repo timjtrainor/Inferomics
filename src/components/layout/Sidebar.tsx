@@ -44,7 +44,7 @@ const navigation: MenuItem[] = [
           { name: 'Playground', href: '/inference/playground' },
           { name: 'Prompt presets', href: '/inference/presets' },
           { name: 'Observability', href: '/inference/observability' },
-          { name: 'Inferonomics', href: '/inferonomics' },
+          { name: 'Inferomics', href: '/Inferomics' },
         ]
       },
       { name: 'Post-training', href: '/post-training', icon: <LayoutGrid size={18} /> },
