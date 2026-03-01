@@ -14,6 +14,65 @@ interface Dataset {
   recordCount: number;
 }
 
+interface Profile {
+  id: string;
+  name: string;
+  description: string;
+  logic: string;
+  config: {
+    n: number;
+    weights: {
+      accuracy: number;
+      reliability: number;
+      cost: number;
+      performance: number;
+    };
+  };
+}
+
+const PROFILES: Profile[] = [
+  {
+    id: 'bulk',
+    name: 'Bulk Processor',
+    description: 'Systematic background tasks (parsing, tagging, masking) executed at massive scale.',
+    logic: 'Prioritizes minimizing the "Friction". A 1% increase in cost or latency is more damaging than a 1% decrease in accuracy.',
+    config: {
+      n: 1.0,
+      weights: { accuracy: 10, reliability: 10, cost: 50, performance: 30 }
+    }
+  },
+  {
+    id: 'interactive',
+    name: 'Real-Time Interactive',
+    description: 'Live, user-facing features (chat, autocomplete) where speed defines the product\'s success.',
+    logic: 'Latency is the "Hard Constraint." The score drops significantly if response time exceeds "real-time" threshold.',
+    config: {
+      n: 1.2,
+      weights: { accuracy: 30, reliability: 10, cost: 10, performance: 50 }
+    }
+  },
+  {
+    id: 'analytical',
+    name: 'Analytical Agent',
+    description: 'Human-in-the-loop tasks like summarization, research, or drafting.',
+    logic: 'A balanced trade-off. We seek a "Sweet Spot" where gain in intelligence justifies the resource spend.',
+    config: {
+      n: 1.5,
+      weights: { accuracy: 40, reliability: 20, cost: 20, performance: 20 }
+    }
+  },
+  {
+    id: 'autonomous',
+    name: 'Autonomous Expert',
+    description: 'Logic-heavy tasks (legal, medical, coding) where errors carry significant operational risk.',
+    logic: 'Prioritizes the "Value". Uses a Quadratic Exponent (n=2) to aggressively penalize non-perfect models.',
+    config: {
+      n: 2.0,
+      weights: { accuracy: 50, reliability: 35, cost: 7.5, performance: 7.5 }
+    }
+  }
+];
+
 export default function InferonomicsPage() {
   const {
     selectedDatasetId,
@@ -21,11 +80,15 @@ export default function InferonomicsPage() {
     accuracy,
     setAccuracy,
     sampledData,
-    setSampledData
+    setSampledData,
+    selectedProfileId,
+    setSelectedProfileId
   } = useAppContext();
 
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [isSampling, setIsSampling] = useState(false);
+
+  const selectedProfile = PROFILES.find(p => p.id === selectedProfileId) || PROFILES[2];
 
   // Derived state for the UI boxes
   const selectedDataset = datasets.find((d: Dataset) => d.id === selectedDatasetId);
@@ -85,7 +148,7 @@ export default function InferonomicsPage() {
             <span className="text-gray-300">Inferomics</span>
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">Inferomics</h1>
-          <p className="text-gray-400 mt-2 max-w-2xl">
+          <p className="text-gray-400 mt-2 max-w-2xl text-lg">
             A decision-engine for AI unit economics mapping Accuracy, Latency, Performance, and Cost against Nebius Token Factory.
           </p>
         </div>
@@ -93,6 +156,73 @@ export default function InferonomicsPage() {
           <Settings size={16} />
           <span>Configure Engine</span>
         </button>
+      </div>
+
+      {/* Implementation Objective Selector */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+          <Zap className="text-[#E0FF4F]" size={24} />
+          Implementation Objective
+        </h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {PROFILES.map((profile) => (
+            <button
+              key={profile.id}
+              onClick={() => setSelectedProfileId(profile.id)}
+              className={cn(
+                "text-left p-6 rounded-xl border transition-all duration-300 group",
+                selectedProfileId === profile.id
+                  ? "bg-[#6B4EFF]/10 border-[#6B4EFF] shadow-lg shadow-[#6B4EFF]/10"
+                  : "bg-[#0D1117] border-[#1F2937] hover:border-gray-600"
+              )}
+            >
+              <div className="flex justify-between items-start mb-3">
+                <h3 className={cn(
+                  "text-xl font-bold transition-colors",
+                  selectedProfileId === profile.id ? "text-[#E0FF4F]" : "text-white group-hover:text-[#E0FF4F]"
+                )}>
+                  {profile.name}
+                </h3>
+                <span className="text-sm font-mono text-gray-500 bg-[#1F2937] px-2 py-1 rounded">n={profile.config.n.toFixed(1)}</span>
+              </div>
+              <p className="text-base text-gray-400 mb-6 leading-relaxed">
+                {profile.description}
+              </p>
+
+              <div className="space-y-4 pt-4 border-t border-[#1F2937]">
+                <div className="flex justify-between items-center text-sm uppercase tracking-wider text-gray-500 font-medium">
+                  <span>Pillar Distribution</span>
+                </div>
+                <div className="h-2.5 w-full bg-[#1F2937] rounded-full overflow-hidden flex">
+                  <div style={{ width: `${profile.config.weights.accuracy}%` }} className="h-full bg-[#6B4EFF]" title={`Accuracy: ${profile.config.weights.accuracy}%`} />
+                  <div style={{ width: `${profile.config.weights.reliability}%` }} className="h-full bg-[#E0FF4F]" title={`Reliability: ${profile.config.weights.reliability}%`} />
+                  <div style={{ width: `${profile.config.weights.performance}%` }} className="h-full bg-blue-500" title={`Performance: ${profile.config.weights.performance}%`} />
+                  <div style={{ width: `${profile.config.weights.cost}%` }} className="h-full bg-orange-500" title={`Cost: ${profile.config.weights.cost}%`} />
+                </div>
+                <div className="flex flex-wrap gap-x-5 gap-y-2 mt-2">
+                  <div className="flex items-center gap-2 text-sm text-gray-400">
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#6B4EFF]" /> Acc
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-400">
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#E0FF4F]" /> Rel
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-400">
+                    <div className="w-2.5 h-2.5 rounded-full bg-blue-500" /> Perf
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-400">
+                    <div className="w-2.5 h-2.5 rounded-full bg-orange-500" /> Cost
+                  </div>
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+        {selectedProfile && (
+          <div className="text-lg text-gray-200 bg-[#0D1117]/80 p-6 rounded-lg border border-[#6B4EFF]/20 mt-4 shadow-inner">
+            <span className="text-[#E0FF4F] font-bold uppercase text-sm tracking-widest block mb-2">Logic Pattern</span>
+            {selectedProfile.logic}
+          </div>
+        )}
       </div>
 
       {/* Main Content Area: Data Selection */}
@@ -231,69 +361,6 @@ export default function InferonomicsPage() {
         </div>
       </div>
 
-      {/* Model Comparison / Weighted Sliders Section */}
-      <div className="mt-12 opacity-50 pointer-events-none relative">
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#001A2B] z-10 flex items-end justify-center pb-8">
-          <span className="bg-[#1F2937] text-white px-4 py-2 rounded-full text-sm font-medium border border-[#374151]">Engine optimization will unlock after verification</span>
-        </div>
-        <h2 className="text-lg font-semibold text-white mb-6">Optimization Weights</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-
-          <div className="decision-card">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded bg-[#1F2937] flex items-center justify-center">
-                  <BarChart3 size={16} className="text-[#6B4EFF]" />
-                </div>
-                <h3 className="font-semibold text-white">Accuracy</h3>
-              </div>
-              <span className="text-gray-400 font-mono text-sm">75%</span>
-            </div>
-            <p className="text-sm text-gray-500 mb-6">Weight priority for model precision and correctness.</p>
-            <div>
-              <input type="range" className="custom-slider" defaultValue="75" />
-            </div>
-          </div>
-
-          <div className="decision-card">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded bg-[#1F2937] flex items-center justify-center">
-                  <Clock size={16} className="text-[#6B4EFF]" />
-                </div>
-                <h3 className="font-semibold text-white">Latency</h3>
-              </div>
-              <span className="text-gray-400 font-mono text-sm">40%</span>
-            </div>
-            <p className="text-sm text-gray-500 mb-6">Weight priority for time-to-first-token and throughput.</p>
-            <div>
-              <input type="range" className="custom-slider" defaultValue="40" />
-            </div>
-          </div>
-
-          <div className="decision-card recommended relative overflow-hidden">
-            <div className="absolute top-0 right-0 px-3 py-1 bg-[#E0FF4F] text-black text-xs font-bold rounded-bl-lg shadow-sm">
-              OPTIMAL
-            </div>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 rounded bg-[#E0FF4F]/10 flex items-center justify-center">
-                <Zap size={16} className="text-[#E0FF4F]" />
-              </div>
-              <h3 className="font-semibold text-white">Cost-Efficiency Target</h3>
-            </div>
-            <p className="text-sm text-gray-500 mb-6">Projected token economics based on current weights.</p>
-            <div className="mt-auto flex items-center justify-between pt-2 border-t border-[#1F2937]/50">
-              <span className="text-[#E0FF4F] font-mono text-lg font-semibold tracking-tight">$0.45 <span className="text-sm text-gray-500 font-sans">/ 1M tokens</span></span>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400 uppercase tracking-wider">Live</span>
-                <span className="status-pulse"></span>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-    </div >
+    </div>
   );
 }

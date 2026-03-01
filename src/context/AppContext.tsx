@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 
 interface SampledData {
     sampleSize: number;
@@ -15,6 +15,8 @@ interface AppContextType {
     setAccuracy: (accuracy: string) => void;
     sampledData: SampledData | null;
     setSampledData: (data: SampledData | null) => void;
+    selectedProfileId: string;
+    setSelectedProfileId: (id: string) => void;
     resetState: () => void;
 }
 
@@ -24,11 +26,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [selectedDatasetId, setSelectedDatasetId] = useState<string>('');
     const [accuracy, setAccuracy] = useState<string>('Standard');
     const [sampledData, setSampledData] = useState<SampledData | null>(null);
+    const [selectedProfileId, setSelectedProfileId] = useState<string>(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('inferomics_profile_id') || 'analytical';
+        }
+        return 'analytical';
+    });
+
+    useEffect(() => {
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('inferomics_profile_id', selectedProfileId);
+        }
+    }, [selectedProfileId]);
 
     const resetState = () => {
         setSelectedDatasetId('');
         setAccuracy('Standard');
         setSampledData(null);
+        setSelectedProfileId('analytical');
     };
 
     return (
@@ -39,6 +54,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setAccuracy,
             sampledData,
             setSampledData,
+            selectedProfileId,
+            setSelectedProfileId,
             resetState
         }}>
             {children}
