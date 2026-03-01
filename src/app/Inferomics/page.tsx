@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { encode } from 'gpt-tokenizer';
-import { Settings, BarChart3, Zap, Database, ChevronDown, CheckCircle2, Search } from 'lucide-react';
+import { Settings, BarChart3, Zap, Database, ChevronDown, CheckCircle2, Search, TrendingUp, DollarSign, Activity, Cloud } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppContext } from '@/context/AppContext';
 import { calculateCochran } from '@/lib/statistics';
@@ -123,7 +123,88 @@ const PROFILES: Profile[] = [
   }
 ];
 
-export default function InferonomicsPage() {
+interface LeverInputProps {
+  label: string;
+  icon: React.ReactNode;
+  value: number;
+  onChange: (val: number) => void;
+  unit: string;
+  description: string;
+  colorClass: string;
+  isCurrency?: boolean;
+  secondsValue?: number;
+}
+
+function LeverInput({ label, icon, value, onChange, unit, description, colorClass, isCurrency, secondsValue }: LeverInputProps) {
+  const [internalValue, setInternalValue] = useState(value.toString());
+
+  // Sync with prop when external changes occur (like objective selection)
+  useEffect(() => {
+    setInternalValue(value.toString());
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.replace(/[^0-9.]/g, '');
+    setInternalValue(val);
+    const num = parseFloat(val);
+    if (!isNaN(num)) {
+      onChange(num);
+    } else if (val === '') {
+      onChange(0);
+    }
+  };
+
+  const ringColor = colorClass.includes('6B4EFF') ? 'focus:border-[#6B4EFF]' :
+    colorClass.includes('E0FF4F') ? 'focus:border-[#E0FF4F]' :
+      'focus:border-blue-500';
+
+  const textColor = colorClass.includes('6B4EFF') ? 'text-[#6B4EFF]' :
+    colorClass.includes('E0FF4F') ? 'text-[#E0FF4F]' :
+      'text-blue-400';
+
+  const hoverBorder = colorClass.includes('6B4EFF') ? 'hover:border-[#6B4EFF]/50' :
+    colorClass.includes('E0FF4F') ? 'hover:border-[#E0FF4F]/50' :
+      'hover:border-blue-500/50';
+
+  return (
+    <div className={cn("lever-card p-6 rounded-xl border border-[#1F2937] bg-[#0D1117] flex flex-col gap-3 group transition-all", hoverBorder)}>
+      <div className={cn("flex items-center justify-between", textColor)}>
+        <div className="flex items-center gap-2">
+          {icon}
+          <span className="text-sm font-semibold uppercase tracking-wider">{label}</span>
+        </div>
+        {secondsValue !== undefined && (
+          <div className="bg-[#E0FF4F] text-[#001A2B] font-mono text-[11px] font-black px-2.5 py-1 rounded-md shadow-[0_0_15px_rgba(224,255,79,0.4)]">
+            ~{secondsValue.toFixed(2)}s
+          </div>
+        )}
+      </div>
+      <div className="relative flex items-center">
+        {isCurrency && <span className="absolute left-4 z-10 text-gray-400 font-mono pointer-events-none">$</span>}
+        <input
+          type="text"
+          value={internalValue}
+          onFocus={() => {
+            if (value === 0) setInternalValue("");
+          }}
+          onBlur={() => setInternalValue(value.toString())}
+          onChange={handleChange}
+          className={cn(
+            "w-full bg-[#1F2937] border border-[#374151] rounded-lg px-4 py-3 text-2xl font-mono text-white focus:outline-none transition-colors",
+            ringColor,
+            isCurrency && "pl-8"
+          )}
+        />
+        {unit && (
+          <span className="absolute right-4 text-gray-500 font-mono text-xs pointer-events-none">{unit}</span>
+        )}
+      </div>
+      <p className="text-xs text-gray-500">{description}</p>
+    </div>
+  );
+}
+
+export default function InferomicsPage() {
   const {
     selectedDatasetId,
     setSelectedDatasetId,
@@ -137,12 +218,19 @@ export default function InferonomicsPage() {
     setMasterPrompt,
     selectedModels,
     setSelectedModels,
+    projectedVolume,
+    setProjectedVolume,
+    latencyTolerance,
+    setLatencyTolerance,
+    errorRiskCost,
+    setErrorRiskCost,
     configStatus
   } = useAppContext();
 
   const [localPrompt, setLocalPrompt] = useState(masterPrompt);
   const [tokenCount, setTokenCount] = useState(0);
   const [modelSearch, setModelSearch] = useState('');
+  const [saveStatus, setSaveStatus] = useState<'IDLE' | 'SAVING' | 'SAVED'>('IDLE');
 
   // Sync from context on load
   useEffect(() => {
@@ -179,6 +267,58 @@ export default function InferonomicsPage() {
 
     return () => clearTimeout(timer);
   }, [localPrompt, setMasterPrompt]);
+
+  // Session Recovery from API
+  useEffect(() => {
+    const recoverSession = async () => {
+      try {
+        const res = await fetch('/api/inferomics/config');
+        const data = await res.json();
+        if (data.config) {
+          const { masterPrompt, selectedModels, selectedProfileId, projectedVolume, latencyTolerance, errorRiskCost } = data.config;
+          if (masterPrompt) setMasterPrompt(masterPrompt);
+          if (selectedModels) setSelectedModels(selectedModels);
+          if (selectedProfileId) setSelectedProfileId(selectedProfileId);
+          if (projectedVolume) setProjectedVolume(projectedVolume);
+          if (latencyTolerance) setLatencyTolerance(latencyTolerance);
+          if (errorRiskCost) setErrorRiskCost(errorRiskCost);
+        }
+      } catch (e) {
+        console.error('Failed to recover session from API', e);
+      }
+    };
+    recoverSession();
+  }, [setMasterPrompt, setSelectedModels, setSelectedProfileId, setProjectedVolume, setLatencyTolerance, setErrorRiskCost]);
+
+  // Debounced Auto-Save to API
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (!masterPrompt && selectedModels.length === 0) return;
+
+      setSaveStatus('SAVING');
+      try {
+        await fetch('/api/inferomics/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            masterPrompt,
+            selectedModels,
+            selectedProfileId,
+            projectedVolume,
+            latencyTolerance,
+            errorRiskCost
+          })
+        });
+        setSaveStatus('SAVED');
+        setTimeout(() => setSaveStatus('IDLE'), 3000);
+      } catch (e) {
+        console.error('Failed to auto-save', e);
+        setSaveStatus('IDLE');
+      }
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [masterPrompt, selectedModels, selectedProfileId, projectedVolume, latencyTolerance, errorRiskCost]);
 
   const toggleModel = (modelId: string) => {
     if (selectedModels.includes(modelId)) {
@@ -266,10 +406,21 @@ export default function InferonomicsPage() {
             A decision-engine for AI unit economics mapping Accuracy, Reliability, Performance, and Cost against Nebius Token Factory.
           </p>
         </div>
-        <button className="bg-[#6B4EFF] hover:bg-[#5a41d9] text-white px-4 py-2 rounded-md font-medium text-sm flex items-center gap-2 btn-lift shadow-lg shadow-[#6B4EFF]/20">
-          <Settings size={16} />
-          <span>Configure Engine</span>
-        </button>
+        <div className="flex flex-col items-end gap-2">
+          {saveStatus !== 'IDLE' && (
+            <div className={cn(
+              "flex items-center gap-2 text-xs font-mono transition-all duration-500",
+              saveStatus === 'SAVING' ? "text-blue-400 animate-pulse" : "text-[#E0FF4F]"
+            )}>
+              {saveStatus === 'SAVING' ? <Activity size={12} /> : <CheckCircle2 size={12} />}
+              <span>{saveStatus === 'SAVING' ? 'Auto-saving...' : 'Changes Saved'}</span>
+            </div>
+          )}
+          <button className="bg-[#6B4EFF] hover:bg-[#5a41d9] text-white px-4 py-2 rounded-md font-medium text-sm flex items-center gap-2 btn-lift shadow-lg shadow-[#6B4EFF]/20">
+            <Settings size={16} />
+            <span>Configure Engine</span>
+          </button>
+        </div>
       </div>
 
       {/* Implementation Objective Selector */}
@@ -338,6 +489,66 @@ export default function InferonomicsPage() {
           </div>
         )}
       </div>
+
+      {/* Economic Levers Section */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+          <TrendingUp className="text-[#E0FF4F]" size={24} />
+          Economic Levers
+        </h2>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <LeverInput
+            label="Projected Monthly Volume"
+            icon={<Activity size={18} />}
+            value={projectedVolume}
+            onChange={setProjectedVolume}
+            unit="REQS"
+            description="Scale factor determining absolute infrastructure spend & amortized costs."
+            colorClass="[#6B4EFF]"
+          />
+
+          <LeverInput
+            label="Latency Tolerance"
+            icon={<Cloud size={18} />}
+            value={latencyTolerance}
+            onChange={setLatencyTolerance}
+            unit="ms"
+            description="The &quot;Hard Constraint&quot; for performance-weighted profile scoring logic."
+            colorClass="blue-500"
+            secondsValue={latencyTolerance / 1000}
+          />
+
+          <LeverInput
+            label="Error Risk Cost (Per instance)"
+            icon={<DollarSign size={18} />}
+            value={errorRiskCost}
+            onChange={setErrorRiskCost}
+            unit=""
+            isCurrency
+            description="Calculative penalty for reliability failures (Impact on Economic Winner)."
+            colorClass="[#E0FF4F]"
+          />
+        </div>
+      </div>
+
+      {/* TEI Formula Display */}
+      {/* <div className="bg-[#0D1117] border border-[#1F2937] rounded-lg p-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="bg-[#6B4EFF]/10 p-2 rounded text-[#6B4EFF]">
+            <TrendingUp size={16} />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">Economic Scoring Logic</p>
+            <div className="font-mono text-sm text-[#E0FF4F] mt-1">
+              TEI = (Avg Token Cost × Volume) + ((1 - Reliability%) × Volume × Error Risk Cost)
+            </div>
+          </div>
+        </div>
+        <div className="text-[10px] text-gray-500 font-mono uppercase tracking-tighter text-right">
+          Nebius<br />Unit Economics Framework
+        </div>
+      </div> */}
 
       {/* Configuration Step */}
       <div className="space-y-4">
@@ -512,6 +723,12 @@ export default function InferonomicsPage() {
                 </select>
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
               </div>
+              {selectedDataset && (
+                <div className="flex items-center gap-2 text-[10px] font-bold text-[#E0FF4F] uppercase tracking-widest bg-[#E0FF4F]/10 px-2 py-1 rounded border border-[#E0FF4F]/20 animate-in zoom-in duration-300">
+                  <CheckCircle2 size={12} />
+                  <span>GoEmotions Dataset Linked</span>
+                </div>
+              )}
             </div>
 
             <div>
@@ -612,6 +829,6 @@ export default function InferonomicsPage() {
         </div>
       </div>
 
-    </div>
+    </div >
   );
 }
