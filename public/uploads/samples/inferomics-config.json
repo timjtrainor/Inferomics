@@ -1,0 +1,14 @@
+{
+  "masterPrompt": "### TASK\nClassify the sentiment of the provided TEXT using exactly one label from the ALLOWED LABELS list.\n\n### RULES\n1. Output format: You MUST provide the final label inside double brackets, e.g., [[label]].\n2. No chatter: Do not include introductory text, explanations, or closing remarks.\n3. Constraint: Use ONLY labels from the provided list. If uncertain, use [[neutral]].\n\n### ALLOWED LABELS\nadmiration, amusement, anger, annoyance, approval, caring, confusion, curiosity, desire, disappointment, disapproval, disgust, embarrassment, excitement, fear, gratitude, grief, joy, love, nervousness, optimism, pride, realization, relief, remorse, sadness, surprise, neutral.",
+  "selectedModels": [
+    "gemma-2-2b",
+    "gpt-oss-120b",
+    "gemma-2-9b",
+    "gpt-oss-20b"
+  ],
+  "selectedProfileId": "bulk",
+  "projectedVolume": 1000000,
+  "latencyTolerance": 250,
+  "errorRiskCost": 0.05,
+  "updatedAt": "2026-03-01T22:59:32.071Z"
+}

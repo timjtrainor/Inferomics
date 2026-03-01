@@ -133,4 +133,11 @@
     border-color: var(--color-brand-primary);
     background: rgba(13, 17, 23, 0.6);
   }
+
+  /* Lever Cards */
+  .lever-card {
+    background: rgba(13, 17, 23, 0.8);
+    backdrop-filter: blur(8px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
 }
