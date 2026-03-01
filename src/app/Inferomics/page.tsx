@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { Settings, BarChart3, Clock, Zap, Database, ChevronDown, CheckCircle2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { encode } from 'gpt-tokenizer';
+import { Settings, BarChart3, Zap, Database, ChevronDown, CheckCircle2, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppContext } from '@/context/AppContext';
 import { calculateCochran } from '@/lib/statistics';
@@ -29,6 +30,55 @@ interface Profile {
     };
   };
 }
+
+const AVAILABLE_MODELS = [
+  { id: 'bge-icl', name: 'BGE-ICL', provider: 'BAAI', type: 'Embedding', priceIn: 0.01, priceOut: 0, isFast: false, throughput: 4096 },
+  { id: 'bge-multilingual', name: 'bge-multilingual-gemma2', provider: 'BAAI', type: 'Embedding', priceIn: 0.01, priceOut: 0, isFast: false, throughput: 0 },
+  { id: 'deepseek-r1-base', name: 'DeepSeek-R1-0528', provider: 'DeepSeek', type: 'Text-to-text', priceIn: 0.80, priceOut: 2.40, isFast: false, throughput: 20 },
+  { id: 'deepseek-r1-fast', name: 'DeepSeek-R1-0528', provider: 'DeepSeek', type: 'Text-to-text', priceIn: 2.00, priceOut: 6.00, isFast: true, throughput: 120 },
+  { id: 'deepseek-v3-base', name: 'DeepSeek-V3-0324', provider: 'DeepSeek', type: 'Text-to-text', priceIn: 0.50, priceOut: 1.50, isFast: false, throughput: 25 },
+  { id: 'deepseek-v3-fast', name: 'DeepSeek-V3-0324', provider: 'DeepSeek', type: 'Text-to-text', priceIn: 0.75, priceOut: 2.25, isFast: true, throughput: 120 },
+  { id: 'deepseek-v3.2', name: 'DeepSeek-V3.2', provider: 'DeepSeek', type: 'Text-to-text', priceIn: 0.30, priceOut: 0.45, isFast: false, throughput: 20 },
+  { id: 'e5-mistral', name: 'e5-mistral-7b-instruct', provider: 'intfloat', type: 'Embedding', priceIn: 0.01, priceOut: 0, isFast: false, throughput: 4096 },
+  { id: 'flux-dev', name: 'FLUX.1-dev', provider: 'Black Forest Labs', type: 'Text-to-image', priceIn: 0.007, priceOut: 0.02, isFast: false, throughput: 0 },
+  { id: 'flux-schnell', name: 'FLUX.1-schnell', provider: 'Black Forest Labs', type: 'Text-to-image', priceIn: 0.001, priceOut: 0.01, isFast: false, throughput: 0 },
+  { id: 'gemma-2-2b', name: 'Gemma-2-2b-it', provider: 'Google', type: 'Text-to-text', priceIn: 0.02, priceOut: 0.06, isFast: false, throughput: 80 },
+  { id: 'gemma-2-9b', name: 'Gemma-2-9b-it', provider: 'Google', type: 'Text-to-text', priceIn: 0.03, priceOut: 0.09, isFast: true, throughput: 90 },
+  { id: 'gemma-3-base', name: 'Gemma-3-27b-it', provider: 'Google', type: 'Vision', priceIn: 0.10, priceOut: 0.30, isFast: false, throughput: 20 },
+  { id: 'gemma-3-fast', name: 'Gemma-3-27b-it', provider: 'Google', type: 'Vision', priceIn: 0.20, priceOut: 0.60, isFast: true, throughput: 55 },
+  { id: 'glm-4.5', name: 'GLM-4.5', provider: 'Z.ai', type: 'Text-to-text', priceIn: 0.60, priceOut: 2.20, isFast: false, throughput: 30 },
+  { id: 'glm-4.5-air', name: 'GLM-4.5-Air', provider: 'Z.ai', type: 'Text-to-text', priceIn: 0.20, priceOut: 1.20, isFast: false, throughput: 25 },
+  { id: 'glm-4.7', name: 'GLM-4.7', provider: 'Z.ai', type: 'Text-to-text', priceIn: 0.40, priceOut: 2.00, isFast: false, throughput: 30 },
+  { id: 'gpt-oss-120b', name: 'gpt-oss-120b', provider: 'OpenAI', type: 'Text-to-text', priceIn: 0.15, priceOut: 0.60, isFast: false, throughput: 40 },
+  { id: 'gpt-oss-20b', name: 'gpt-oss-20b', provider: 'OpenAI', type: 'Text-to-text', priceIn: 0.05, priceOut: 0.20, isFast: false, throughput: 64 },
+  { id: 'hermes-4-405b', name: 'Hermes-4-405B', provider: 'NousResearch', type: 'Text-to-text', priceIn: 1.00, priceOut: 3.00, isFast: false, throughput: 20 },
+  { id: 'hermes-4-70b', name: 'Hermes-4-70B', provider: 'NousResearch', type: 'Text-to-text', priceIn: 0.13, priceOut: 0.40, isFast: false, throughput: 20 },
+  { id: 'intellect-3', name: 'INTELLECT-3', provider: 'Prime Intellect', type: 'Text-to-text', priceIn: 0.20, priceOut: 1.10, isFast: false, throughput: 35 },
+  { id: 'kimi-k2-instruct', name: 'Kimi-K2-Instruct', provider: 'Moonshot AI', type: 'Text-to-text', priceIn: 0.50, priceOut: 2.40, isFast: false, throughput: 40 },
+  { id: 'kimi-k2-thinking', name: 'Kimi-K2-Thinking', provider: 'Moonshot AI', type: 'Text-to-text', priceIn: 0.60, priceOut: 2.50, isFast: false, throughput: 45.7 },
+  { id: 'kimi-k2.5', name: 'Kimi-K2.5', provider: 'Moonshot AI', type: 'Text-to-text', priceIn: 0.50, priceOut: 2.50, isFast: false, throughput: 60 },
+  { id: 'llama-3-1-nemotron', name: 'Llama-3_1-Nemotron-Ultra-253B-v1', provider: 'NVIDIA', type: 'Text-to-text', priceIn: 0.60, priceOut: 1.80, isFast: false, throughput: 25 },
+  { id: 'llama-3-3-base', name: 'Llama-3.3-70B-Instruct', provider: 'Meta', type: 'Text-to-text', priceIn: 0.13, priceOut: 0.40, isFast: false, throughput: 25 },
+  { id: 'llama-3-3-fast', name: 'Llama-3.3-70B-Instruct', provider: 'Meta', type: 'Text-to-text', priceIn: 0.25, priceOut: 0.75, isFast: true, throughput: 120 },
+  { id: 'meta-llama-8b-base', name: 'Meta-Llama-3.1-8B-Instruct', provider: 'Meta', type: 'Text-to-text', priceIn: 0.02, priceOut: 0.06, isFast: false, throughput: 30 },
+  { id: 'meta-llama-8b-fast', name: 'Meta-Llama-3.1-8B-Instruct', provider: 'Meta', type: 'Text-to-text', priceIn: 0.03, priceOut: 0.09, isFast: true, throughput: 155 },
+  { id: 'llama-guard-3', name: 'Meta-Llama-Guard-3-8B', provider: 'Meta', type: 'Safety guardrail', priceIn: 0.02, priceOut: 0.06, isFast: false, throughput: 118 },
+  { id: 'minimax-m2.1', name: 'MiniMax-M2.1', provider: 'Minimax', type: 'Text-to-text', priceIn: 0.30, priceOut: 1.20, isFast: false, throughput: 36.8 },
+  { id: 'nemotron-3-nano', name: 'Nemotron-3-Nano-30B-A3B', provider: 'NVIDIA', type: 'Text-to-text', priceIn: 0.06, priceOut: 0.24, isFast: false, throughput: 60 },
+  { id: 'nemotron-nano', name: 'Nemotron-Nano-V2-12b', provider: 'NVIDIA', type: 'Vision', priceIn: 0.07, priceOut: 0.20, isFast: false, throughput: 70 },
+  { id: 'qwen-coder-7b-fast', name: 'Qwen2.5-Coder-7B', provider: 'Qwen', type: 'Text-to-text', priceIn: 0.03, priceOut: 0.09, isFast: true, throughput: 125 },
+  { id: 'qwen-vl-72b', name: 'Qwen2.5-VL-72B-Instruct', provider: 'Qwen', type: 'Vision', priceIn: 0.25, priceOut: 0.75, isFast: false, throughput: 20 },
+  { id: 'qwen3-235b-instruct', name: 'Qwen3-235B-A22B-Instruct-2507', provider: 'Qwen', type: 'Text-to-text', priceIn: 0.20, priceOut: 0.60, isFast: false, throughput: 27 },
+  { id: 'qwen3-235b-thinking', name: 'Qwen3-235B-A22B-Thinking-2507', provider: 'Qwen', type: 'Text-to-text', priceIn: 0.20, priceOut: 0.80, isFast: false, throughput: 27 },
+  { id: 'qwen3-30b-instruct', name: 'Qwen3-30B-A3B-Instruct-2507', provider: 'Qwen', type: 'Text-to-text', priceIn: 0.10, priceOut: 0.30, isFast: false, throughput: 70 },
+  { id: 'qwen3-30b-thinking', name: 'Qwen3-30B-A3B-Thinking-2507', provider: 'Qwen', type: 'Text-to-text', priceIn: 0.10, priceOut: 0.30, isFast: false, throughput: 56 },
+  { id: 'qwen3-32b-base', name: 'Qwen3-32B', provider: 'Qwen', type: 'Text-to-text', priceIn: 0.10, priceOut: 0.30, isFast: false, throughput: 23 },
+  { id: 'qwen3-32b-fast', name: 'Qwen3-32B', provider: 'Qwen', type: 'Text-to-text', priceIn: 0.20, priceOut: 0.60, isFast: true, throughput: 110 },
+  { id: 'qwen3-coder-30b', name: 'Qwen3-Coder-30B-A3B-Instruct', provider: 'Qwen', type: 'Text-to-text', priceIn: 0.10, priceOut: 0.30, isFast: false, throughput: 60 },
+  { id: 'qwen3-coder-480b', name: 'Qwen3-Coder-480B-A35B-Instruct', provider: 'Qwen', type: 'Text-to-text', priceIn: 0.40, priceOut: 1.80, isFast: false, throughput: 35 },
+  { id: 'qwen-embedding', name: 'Qwen3-Embedding-8B', provider: 'Qwen', type: 'Embedding', priceIn: 0.01, priceOut: 0, isFast: false, throughput: 4096 },
+  { id: 'qwen3-next-80b', name: 'Qwen3-Next-80B-A3B-Thinking', provider: 'Qwen', type: 'Text-to-text', priceIn: 0.15, priceOut: 1.20, isFast: false, throughput: 85 },
+];
 
 const PROFILES: Profile[] = [
   {
@@ -82,8 +132,71 @@ export default function InferonomicsPage() {
     sampledData,
     setSampledData,
     selectedProfileId,
-    setSelectedProfileId
+    setSelectedProfileId,
+    masterPrompt,
+    setMasterPrompt,
+    selectedModels,
+    setSelectedModels,
+    configStatus
   } = useAppContext();
+
+  const [localPrompt, setLocalPrompt] = useState(masterPrompt);
+  const [tokenCount, setTokenCount] = useState(0);
+  const [modelSearch, setModelSearch] = useState('');
+
+  // Sync from context on load
+  useEffect(() => {
+    setLocalPrompt(masterPrompt);
+  }, [masterPrompt]);
+
+  const masterPromptRef = useRef(masterPrompt);
+  useEffect(() => {
+    masterPromptRef.current = masterPrompt;
+  }, [masterPrompt]);
+
+  // Handle token counting and debounced save
+  useEffect(() => {
+    // If empty, update immediately for better UX responsiveness
+    if (!localPrompt.trim()) {
+      setTokenCount(0);
+    }
+
+    const timer = setTimeout(() => {
+      // 1. Sync token count on rest (for non-empty)
+      if (localPrompt.trim()) {
+        try {
+          setTokenCount(encode(localPrompt).length);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      // 2. Sync master state on rest
+      if (localPrompt !== masterPromptRef.current) {
+        setMasterPrompt(localPrompt);
+      }
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [localPrompt, setMasterPrompt]);
+
+  const toggleModel = (modelId: string) => {
+    if (selectedModels.includes(modelId)) {
+      setSelectedModels(selectedModels.filter(id => id !== modelId));
+    } else {
+      if (selectedModels.length < 5) {
+        setSelectedModels([...selectedModels, modelId]);
+      }
+    }
+  };
+
+  const filteredModels = useMemo(() => {
+    return AVAILABLE_MODELS.filter(m =>
+      (m.type === 'Text-to-text' || m.type === 'Vision') &&
+      (m.name.toLowerCase().includes(modelSearch.toLowerCase()) ||
+        m.provider.toLowerCase().includes(modelSearch.toLowerCase()))
+    );
+  }, [modelSearch]);
 
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [isSampling, setIsSampling] = useState(false);
@@ -100,7 +213,8 @@ export default function InferonomicsPage() {
     return calculateCochran(selectedDataset.recordCount, marginOfError);
   }, [selectedDataset, accuracy]);
 
-  const isLocked = !!sampledData;
+  const isSessionLocked = !!sampledData;
+  const isDataSelectionLocked = isSessionLocked || configStatus === 'DRAFT';
 
   useEffect(() => {
     fetch('/api/datasets')
@@ -112,7 +226,7 @@ export default function InferonomicsPage() {
   }, []);
 
   const handleSample = async () => {
-    if (!selectedDatasetId || isLocked) return;
+    if (!selectedDatasetId || isDataSelectionLocked) return;
     setIsSampling(true);
     try {
       const res = await fetch('/api/inferomics/sample', {
@@ -149,7 +263,7 @@ export default function InferonomicsPage() {
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">Inferomics</h1>
           <p className="text-gray-400 mt-2 max-w-2xl text-lg">
-            A decision-engine for AI unit economics mapping Accuracy, Latency, Performance, and Cost against Nebius Token Factory.
+            A decision-engine for AI unit economics mapping Accuracy, Reliability, Performance, and Cost against Nebius Token Factory.
           </p>
         </div>
         <button className="bg-[#6B4EFF] hover:bg-[#5a41d9] text-white px-4 py-2 rounded-md font-medium text-sm flex items-center gap-2 btn-lift shadow-lg shadow-[#6B4EFF]/20">
@@ -225,20 +339,157 @@ export default function InferonomicsPage() {
         )}
       </div>
 
+      {/* Configuration Step */}
+      <div className="space-y-4">
+        <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+          <Settings className="text-[#6B4EFF]" size={24} />
+          Configuration Logic
+        </h2>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Master Prompt */}
+          <div className="bg-[#0D1117] border border-[#1F2937] rounded-xl p-6 flex flex-col h-[480px]">
+            <h3 className="text-lg font-semibold text-white mb-2 flex items-center justify-between">
+              Master System Prompt
+              <span className={cn(
+                "text-xs px-2 py-1 rounded font-mono",
+                localPrompt.trim().length > 0 ? "bg-[#6B4EFF]/20 text-[#6B4EFF]" : "bg-[#1F2937] text-gray-400"
+              )}>
+                ~{tokenCount} Tokens
+              </span>
+            </h3>
+            <p className="text-sm text-gray-400 mb-4">
+              Enter the system instructions that will be applied across all candidate models. State saves automatically.
+            </p>
+            <textarea
+              className={cn(
+                "w-full bg-[#1F2937] border border-[#374151] rounded-lg p-4 text-white placeholder-gray-500 focus:outline-none focus:border-[#6B4EFF] resize-y min-h-[160px] flex-grow transition-colors",
+                isSessionLocked && "opacity-50 cursor-not-allowed"
+              )}
+              placeholder="Enter the system instructions that will be applied across all candidate models..."
+              value={localPrompt}
+              onChange={(e) => setLocalPrompt(e.target.value)}
+              disabled={isSessionLocked}
+            />
+          </div>
+
+          {/* Model Selection Basket */}
+          <div className="bg-[#0D1117] border border-[#1F2937] rounded-xl p-6 flex flex-col h-[480px]">
+            <h3 className="text-lg font-semibold text-white mb-2 flex items-center justify-between">
+              Model Candidate Pool
+              <span className={cn(
+                "text-xs px-2 py-1 rounded font-semibold",
+                selectedModels.length >= 2 && selectedModels.length <= 5
+                  ? "bg-[#E0FF4F]/20 text-[#E0FF4F]"
+                  : "bg-orange-500/20 text-orange-400"
+              )}>
+                {selectedModels.length} / 5 Selected (Min 2)
+              </span>
+            </h3>
+            <p className="text-sm text-gray-400 mb-4">
+              Select between 2 to 5 foundational models to test your objective logic.
+            </p>
+
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <input
+                type="text"
+                placeholder="Search models or providers..."
+                className="w-full bg-[#1F2937] border border-[#374151] pl-10 pr-4 py-2 rounded-lg text-sm text-white focus:outline-none focus:border-[#6B4EFF]"
+                value={modelSearch}
+                onChange={(e) => setModelSearch(e.target.value)}
+                disabled={isSessionLocked}
+              />
+            </div>
+
+            <div className="flex-grow overflow-y-auto space-y-2 pr-2 custom-scrollbar border-t border-[#1F2937] pt-2 max-h-[400px]">
+              {filteredModels.map(model => {
+                const isSelected = selectedModels.includes(model.id);
+                const isDisabled = isSessionLocked || (!isSelected && selectedModels.length >= 5);
+
+                return (
+                  <button
+                    key={model.id}
+                    onClick={() => toggleModel(model.id)}
+                    disabled={isDisabled}
+                    aria-pressed={isSelected}
+                    aria-label={`${model.name} by ${model.provider} — ${model.isFast ? 'Fast' : 'Base'} tier`}
+                    className={cn(
+                      "w-full flex items-center justify-between p-3 rounded-lg border text-left transition-all relative overflow-hidden",
+                      isSelected
+                        ? "bg-[#6B4EFF]/10 border-[#6B4EFF] shadow-sm shadow-[#6B4EFF]/10"
+                        : "bg-[#1F2937] border-[#374151] hover:border-gray-600",
+                      isDisabled && !isSelected && "opacity-50 cursor-not-allowed"
+                    )}
+                  >
+                    <div className="flex-grow">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-white">{model.name}</span>
+                        {model.isFast ? (
+                          <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-[#6B4EFF]/20 text-[#6B4EFF] border border-[#6B4EFF]/30">Fast</span>
+                        ) : (
+                          <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-gray-500/10 text-gray-400 border border-gray-500/20">Base</span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-gray-500 mt-0.5 font-medium">
+                        {model.provider} &middot; {model.type}
+                      </div>
+                      <div className="flex gap-3 mt-2 font-mono text-[10px]">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-gray-500">In:</span>
+                          <span className="text-[#E0FF4F]">${model.priceIn.toFixed(2)}/1M</span>
+                        </div>
+                        {model.priceOut > 0 && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-gray-500">Out:</span>
+                            <span className="text-[#6B4EFF]">${model.priceOut.toFixed(2)}/1M</span>
+                          </div>
+                        )}
+                        {model.throughput > 0 && (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-gray-500">Speed:</span>
+                            <span className="text-gray-300">{model.throughput} Tok/s</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {isSelected && <CheckCircle2 className="text-[#E0FF4F]" size={18} />}
+                  </button>
+                );
+              })}
+              {filteredModels.length === 0 && (
+                <div className="text-center text-sm text-gray-500 py-4">No models found matching &quot;{modelSearch}&quot;</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Main Content Area: Data Selection */}
       <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
 
         {/* Source Selection Panel */}
         <div className={cn(
-          "bg-[#0D1117] border border-[#1F2937] rounded-xl p-6 transition-opacity",
-          isLocked && "opacity-75"
+          "bg-[#0D1117] border border-[#1F2937] rounded-xl p-6 transition-opacity relative",
+          isDataSelectionLocked && "opacity-60 pointer-events-none cursor-not-allowed"
         )}>
+          {/* Overlay for Draft Config Status */}
+          {configStatus === 'DRAFT' && !isSessionLocked && (
+            <div className="absolute inset-0 z-10 bg-[#0D1117]/60 backdrop-blur-[2px] rounded-xl flex items-center justify-center pointer-events-auto">
+              <div className="bg-[#1F2937] border border-[#374151] px-6 py-4 rounded-lg text-center shadow-xl max-w-[280px]">
+                <Settings className="text-[#6B4EFF] mx-auto mb-2" size={24} />
+                <p className="text-white font-medium text-sm">Configuration Incomplete</p>
+                <p className="text-xs text-gray-400 mt-1">Provide a Master System Prompt and select 2-5 model candidates to unlock.</p>
+              </div>
+            </div>
+          )}
+
           <h2 className="text-lg font-semibold text-white mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Database className="text-[#6B4EFF]" size={20} />
               Data Source Selection
             </div>
-            {isLocked && <span className="text-[10px] bg-[#6B4EFF]/20 text-[#6B4EFF] px-2 py-0.5 rounded border border-[#6B4EFF]/30 uppercase tracking-widest font-bold">Session Locked</span>}
+            {isSessionLocked && <span className="text-[10px] bg-[#6B4EFF]/20 text-[#6B4EFF] px-2 py-0.5 rounded border border-[#6B4EFF]/30 uppercase tracking-widest font-bold">Session Locked</span>}
           </h2>
 
           <div className="space-y-6">
@@ -248,11 +499,11 @@ export default function InferonomicsPage() {
                 <select
                   className={cn(
                     "w-full bg-[#1F2937] border border-[#374151] text-white pl-4 pr-10 py-2.5 rounded-lg appearance-none focus:outline-none focus:border-[#6B4EFF] transition-colors",
-                    isLocked && "cursor-not-allowed opacity-50 bg-[#0D1117]"
+                    isDataSelectionLocked && "bg-[#0D1117]"
                   )}
                   value={selectedDatasetId}
                   onChange={(e) => setSelectedDatasetId(e.target.value)}
-                  disabled={isLocked}
+                  disabled={isDataSelectionLocked}
                 >
                   <option value="" disabled>Choose a dataset...</option>
                   {datasets.map(ds => (
@@ -270,14 +521,14 @@ export default function InferonomicsPage() {
                   <button
                     key={tier}
                     onClick={() => setAccuracy(tier)}
-                    disabled={isLocked}
+                    disabled={isDataSelectionLocked}
                     className={cn(
                       "py-2 rounded-md text-sm font-medium border transition-colors",
                       accuracy === tier
                         ? 'bg-[#6B4EFF]/10 border-[#6B4EFF] text-[#6B4EFF]'
                         : 'bg-[#1F2937] border-[#374151] text-gray-400 hover:text-white hover:border-gray-500',
-                      isLocked && accuracy !== tier && "opacity-30 cursor-not-allowed",
-                      isLocked && accuracy === tier && "cursor-default"
+                      isDataSelectionLocked && accuracy !== tier && "opacity-30",
+                      isDataSelectionLocked && accuracy === tier && "cursor-default"
                     )}
                   >
                     {tier}
@@ -291,15 +542,15 @@ export default function InferonomicsPage() {
 
             <button
               onClick={handleSample}
-              disabled={!selectedDatasetId || isSampling || isLocked}
+              disabled={!selectedDatasetId || isSampling || isDataSelectionLocked}
               className={cn(
                 "w-full px-4 py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all",
-                isLocked
+                isSessionLocked
                   ? "bg-[#1F2937] text-gray-500 border border-[#374151] cursor-default"
                   : "bg-[#E0FF4F] hover:bg-[#d4f535] text-black btn-lift shadow-lg shadow-[#E0FF4F]/10 disabled:opacity-50"
               )}
             >
-              {isSampling ? 'Processing...' : isLocked ? 'Sample Locked for Session' : 'Generate Sample Data'}
+              {isSampling ? 'Processing...' : isSessionLocked ? 'Sample Locked for Session' : 'Generate Sample Data'}
             </button>
           </div>
         </div>
