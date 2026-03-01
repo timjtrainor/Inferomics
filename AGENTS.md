@@ -38,9 +38,9 @@ As the Jules agent, you are assisting the user in hitting their delivery prototy
 src/
   app/
     api/              ← All backend API routes go here
-    inferonomics/     ← Main active page (do not rename)
+    Inferomics/     ← Main active page (do not rename)
     layout.tsx        ← Root layout — TopNav + Sidebar (do not restructure)
-    page.tsx          ← Redirects / → /inferonomics
+    page.tsx          ← Redirects / → /Inferomics
     globals.css       ← Design tokens and component classes (source of truth)
   components/
     layout/           ← TopNav.tsx, Sidebar.tsx (structure is fixed)

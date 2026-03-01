@@ -1,17 +1,29 @@
+"use client";
+
 import React from 'react';
 import { FileText, MessageCircle, ChevronDown, User } from 'lucide-react';
+import { useAppContext } from '@/context/AppContext';
 
 export function TopNav() {
+  const { resetState } = useAppContext();
+
   return (
     <header className="h-14 border-b border-[#1F2937] bg-[#001A2B] flex items-center justify-between px-4 sticky top-0 z-50">
       <div className="flex items-center gap-4">
-        {/* Left icon wrapper */}
-        <div className="w-8 h-8 rounded border border-[#1F2937] flex items-center justify-center bg-[#0D1117]">
-          <div className="w-4 h-4 border border-gray-400 rounded-sm"></div>
+        {/* Left icon wrapper - Reset Trigger */}
+        <div
+          onClick={resetState}
+          className="w-8 h-8 rounded border border-[#1F2937] flex items-center justify-center bg-[#0D1117] cursor-pointer hover:border-[#6B4EFF] hover:bg-[#1F2937] transition-all group"
+          title="Reset session"
+        >
+          <div className="w-4 h-4 border border-gray-400 rounded-sm group-hover:border-[#E0FF4F]"></div>
         </div>
 
         {/* Logo area */}
-        <div className="flex items-center gap-2">
+        <div
+          onClick={resetState}
+          className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+        >
           <span className="text-xl font-bold tracking-tight text-white flex items-center">
             NEBIUS
             <span className="ml-2 text-xs border border-blue-500 text-blue-400 rounded px-1 py-0.5 uppercase tracking-wider">

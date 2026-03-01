@@ -16,14 +16,14 @@ export default async function CatchAllPage({ params }: { params: Promise<{ slug:
           You navigated to: <span className="text-[#E0FF4F] font-mono">{path}</span>
         </p>
         <p className="text-gray-500 mb-8">
-          This is a placeholder page. The actual implementation focuses on the Inferonomics dashboard.
+          This is a placeholder page. The actual implementation focuses on the Inferomics dashboard.
         </p>
         <Link
-          href="/inferonomics"
+          href="/Inferomics"
           className="inline-flex items-center gap-2 bg-[#6B4EFF] hover:bg-[#5a41d9] text-white px-6 py-3 rounded-md font-medium btn-lift"
         >
           <Home size={18} />
-          Go to Inferonomics
+          Go to Inferomics
         </Link>
       </div>
     </div>

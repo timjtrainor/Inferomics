@@ -34,7 +34,7 @@ PORT=3002 npm run dev
 ```
 
 ### Verify local is working
-Visit `http://localhost:3001` — should redirect to `/inferonomics`.
+Visit `http://localhost:3001` — should redirect to `/Inferomics`.
 
 ---
 

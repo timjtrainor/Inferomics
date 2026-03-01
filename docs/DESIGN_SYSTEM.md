@@ -71,7 +71,7 @@ Dashed border empty state. Use when content hasn't loaded or been configured.
 
 | Use Case          | Class / Font           | Example                      |
 |------------------|----------------------|------------------------------|
-| Page title        | `text-2xl font-bold text-white tracking-tight` | "Inferonomics" |
+| Page title        | `text-2xl font-bold text-white tracking-tight` | "Inferomics" |
 | Section heading   | `text-lg font-semibold text-white` | "Optimization Weights" |
 | Card title        | `font-semibold text-white`         | "Accuracy"              |
 | Body / description| `text-sm text-gray-400`            | Descriptive copy        |

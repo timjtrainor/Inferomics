@@ -27,9 +27,9 @@ This is an interview demo POC. Optimize for clarity and speed of iteration, not 
 src/
   app/
     api/              ← All backend API routes go here
-    inferonomics/     ← Main active page (do not rename)
+    Inferomics/     ← Main active page (do not rename)
     layout.tsx        ← Root layout — TopNav + Sidebar (do not restructure)
-    page.tsx          ← Redirects / → /inferonomics
+    page.tsx          ← Redirects / → /Inferomics
     globals.css       ← Design tokens and component classes (source of truth)
   components/
     layout/           ← TopNav.tsx, Sidebar.tsx (structure is fixed)
