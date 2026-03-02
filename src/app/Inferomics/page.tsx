@@ -224,13 +224,16 @@ export default function InferomicsPage() {
     setLatencyTolerance,
     errorRiskCost,
     setErrorRiskCost,
-    configStatus
+    configStatus,
+    saveStatus,
+    isResetForDemo,
+    persistedConfig,
+    restoreField
   } = useAppContext();
 
   const [localPrompt, setLocalPrompt] = useState(masterPrompt);
   const [tokenCount, setTokenCount] = useState(0);
   const [modelSearch, setModelSearch] = useState('');
-  const [saveStatus, setSaveStatus] = useState<'IDLE' | 'SAVING' | 'SAVED'>('IDLE');
 
   // Sync from context on load
   useEffect(() => {
@@ -268,59 +271,16 @@ export default function InferomicsPage() {
     return () => clearTimeout(timer);
   }, [localPrompt, setMasterPrompt]);
 
-  // Session Recovery from API
-  useEffect(() => {
-    const recoverSession = async () => {
-      try {
-        const res = await fetch('/api/inferomics/config');
-        const data = await res.json();
-        if (data.config) {
-          const { masterPrompt, selectedModels, selectedProfileId, projectedVolume, latencyTolerance, errorRiskCost } = data.config;
-          if (masterPrompt) setMasterPrompt(masterPrompt);
-          if (selectedModels) setSelectedModels(selectedModels);
-          if (selectedProfileId) setSelectedProfileId(selectedProfileId);
-          if (projectedVolume) setProjectedVolume(projectedVolume);
-          if (latencyTolerance) setLatencyTolerance(latencyTolerance);
-          if (errorRiskCost) setErrorRiskCost(errorRiskCost);
-        }
-      } catch (e) {
-        console.error('Failed to recover session from API', e);
-      }
-    };
-    recoverSession();
-  }, [setMasterPrompt, setSelectedModels, setSelectedProfileId, setProjectedVolume, setLatencyTolerance, setErrorRiskCost]);
-
-  // Debounced Auto-Save to API
-  useEffect(() => {
-    const timer = setTimeout(async () => {
-      if (!masterPrompt && selectedModels.length === 0) return;
-
-      setSaveStatus('SAVING');
-      try {
-        await fetch('/api/inferomics/config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            masterPrompt,
-            selectedModels,
-            selectedProfileId,
-            projectedVolume,
-            latencyTolerance,
-            errorRiskCost
-          })
-        });
-        setSaveStatus('SAVED');
-        setTimeout(() => setSaveStatus('IDLE'), 3000);
-      } catch (e) {
-        console.error('Failed to auto-save', e);
-        setSaveStatus('IDLE');
-      }
-    }, 2000);
-
-    return () => clearTimeout(timer);
-  }, [masterPrompt, selectedModels, selectedProfileId, projectedVolume, latencyTolerance, errorRiskCost]);
+  // Persistence is now unified in AppContext via /api/objective.
+  // The redundant /api/inferomics/config logic is removed.
 
   const toggleModel = (modelId: string) => {
+    // If we're in reset mode, interact with the pool restores all saved models first
+    if (isResetForDemo) {
+      restoreField('selectedModels');
+      return;
+    }
+
     if (selectedModels.includes(modelId)) {
       setSelectedModels(selectedModels.filter(id => id !== modelId));
     } else {
@@ -366,13 +326,16 @@ export default function InferomicsPage() {
   }, []);
 
   const handleSample = async () => {
-    if (!selectedDatasetId || isDataSelectionLocked) return;
+    const datasetToUse = selectedDatasetId || persistedConfig?.selected_dataset_id;
+    const accuracyToUse = selectedDatasetId ? accuracy : (persistedConfig?.accuracy || accuracy);
+
+    if (!datasetToUse) return;
     setIsSampling(true);
     try {
       const res = await fetch('/api/inferomics/sample', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ datasetId: selectedDatasetId, accuracy })
+        body: JSON.stringify({ datasetId: datasetToUse, accuracy: accuracyToUse })
       });
       const data = await res.json();
       if (data.success) {
@@ -578,6 +541,11 @@ export default function InferomicsPage() {
                 isSessionLocked && "opacity-50 cursor-not-allowed"
               )}
               placeholder="Enter the system instructions that will be applied across all candidate models..."
+              onFocus={() => {
+                if (isResetForDemo) {
+                  restoreField('masterPrompt');
+                }
+              }}
               value={localPrompt}
               onChange={(e) => setLocalPrompt(e.target.value)}
               disabled={isSessionLocked}
@@ -607,6 +575,11 @@ export default function InferomicsPage() {
                 type="text"
                 placeholder="Search models or providers..."
                 className="w-full bg-[#1F2937] border border-[#374151] pl-10 pr-4 py-2 rounded-lg text-sm text-white focus:outline-none focus:border-[#6B4EFF]"
+                onFocus={() => {
+                  if (isResetForDemo) {
+                    restoreField('selectedModels');
+                  }
+                }}
                 value={modelSearch}
                 onChange={(e) => setModelSearch(e.target.value)}
                 disabled={isSessionLocked}

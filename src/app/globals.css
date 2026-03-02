@@ -15,7 +15,8 @@
 @layer base {
   body {
     background-color: var(--color-nebius-bg);
-    color: #e5e7eb; /* tailwind gray-200 */
+    color: #e5e7eb;
+    /* tailwind gray-200 */
     font-family: var(--font-sans);
     margin: 0;
     padding: 0;
@@ -24,10 +25,12 @@
 }
 
 @layer components {
+
   /* Button Lift Micro-interaction */
   .btn-lift {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
+
   .btn-lift:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -44,7 +47,8 @@
   }
 
   .decision-card.recommended {
-    border-color: var(--color-brand-success); /* Neon Green Glow */
+    border-color: var(--color-brand-success);
+    /* Neon Green Glow */
     box-shadow: 0 0 15px var(--color-brand-glow);
   }
 
@@ -115,8 +119,15 @@
   }
 
   @keyframes pulse {
-    0% { transform: scale(1); opacity: 0.6; }
-    100% { transform: scale(2.5); opacity: 0; }
+    0% {
+      transform: scale(1);
+      opacity: 0.6;
+    }
+
+    100% {
+      transform: scale(2.5);
+      opacity: 0;
+    }
   }
 
   /* Empty State Dropzone */

@@ -9,7 +9,10 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@google-cloud/firestore": "^8.3.0",
+    "@google-cloud/storage": "^7.19.0",
     "clsx": "^2.1.1",
+    "dotenv": "^17.3.1",
     "gpt-tokenizer": "^3.4.0",
     "lucide-react": "^0.575.0",
     "next": "^15.5.12",
