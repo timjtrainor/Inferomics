@@ -4,123 +4,165 @@
 
 ---
 
-### `models` — Model Benchmark Configs
+### `objectives` — Session Configuration Persistence
 
-Each document represents a deployable AI model with its benchmark characteristics.
+Primary collection. Stores the user's full working configuration. Uses a single document
+with a fixed ID of `'default'` for the POC (one session per deployment).
 
 ```typescript
-interface ModelConfig {
-  id: string;                  // Firestore document ID
-  name: string;                // Display name, e.g. "Llama 3.1 70B"
-  provider: string;            // e.g. "Nebius"
-  description: string;         // One-line description
-  costPer1MTokens: number;     // USD, e.g. 0.35
-  latencyP50Ms: number;        // Median latency in milliseconds
-  accuracyScore: number;       // 0–100, normalized benchmark score
-  active: boolean;             // Whether to include in recommendations
-  createdAt: Timestamp;
+interface ObjectiveConfig {
+  profile_id: string;            // 'bulk' | 'interactive' | 'analytical' | 'autonomous'
+  master_prompt: string;         // System prompt applied across all candidate models
+  selected_models: string[];     // 2–5 model IDs from AVAILABLE_MODELS
+  selected_dataset_id: string;   // Firestore dataset doc ID
+  accuracy: string;              // 'High' | 'Standard' | 'Low'
+  sampled_data: SampledData | null;
+  economic_levers: {
+    volume: number;              // Projected monthly requests
+    latency: number;             // Latency tolerance in ms
+    error_cost: number;          // Dollar cost per reliability failure
+  };
+  updated_at: Date;
+}
+
+interface SampledData {
+  sampleSize: number;            // Cochran-derived sample size (capped at population)
+  totalRecords: number;          // Full dataset record count
+  sample: Record<string, unknown>[];  // Actual sampled records
 }
 ```
 
-**Seed Data (use this to populate Firestore on first run):**
+**API:**
 
-| name                  | provider | costPer1MTokens | latencyP50Ms | accuracyScore |
-|-----------------------|----------|----------------|-------------|--------------|
-| Llama 3.1 8B Instruct | Nebius   | 0.06           | 210         | 62           |
-| Llama 3.1 70B Instruct| Nebius   | 0.35           | 480         | 80           |
-| Llama 3.1 405B Instruct| Nebius  | 1.20           | 1200        | 92           |
-| Mixtral 8x7B Instruct | Nebius   | 0.18           | 290         | 72           |
-| Qwen 2.5 72B Instruct | Nebius   | 0.30           | 420         | 81           |
+- `GET /api/objective?id=default` — fetch config
+- `POST /api/objective` — save/merge config (uses Firestore `set({ merge: true })`)
 
 ---
 
-### `weightPresets` — Saved Weight Configurations
+### `datasets` — Uploaded JSONL Dataset Metadata
 
-Stores named presets for the accuracy/latency/cost slider configuration.
+Stores metadata for each uploaded dataset. The actual JSONL file lives in Google Cloud Storage.
 
 ```typescript
-interface WeightPreset {
-  id: string;                  // Firestore document ID
-  name: string;                // e.g. "Latency First", "Cost Optimized"
-  accuracyWeight: number;      // 0–100
-  latencyWeight: number;       // 0–100
-  costWeight: number;          // 0–100
-  // Note: weights do NOT need to sum to 100 — they are relative priorities
-  createdAt: Timestamp;
+interface DatasetMeta {
+  id: string;           // Firestore document ID
+  name: string;         // Display name (from filename)
+  url: string;          // GCS public or signed URL
+  recordCount: number;  // Number of records in the JSONL file
+  createdAt: string;    // ISO timestamp
 }
 ```
 
-**Built-in Presets (seed these):**
+**API:**
 
-| name             | accuracyWeight | latencyWeight | costWeight |
-|-----------------|---------------|--------------|-----------|
-| Balanced         | 33             | 33            | 33         |
-| Accuracy First   | 80             | 10            | 10         |
-| Latency First    | 10             | 80            | 10         |
-| Cost Optimized   | 20             | 20            | 80         |
+- `GET /api/datasets` — list all datasets
+- `POST /api/datasets/upload` — upload JSONL → GCS + write metadata to Firestore
 
 ---
 
-### `inferenceLogs` — Decision History (optional, add last)
+## Implementation Profiles
 
-Tracks which model was recommended and selected during a session.
+Four profiles are defined statically in `src/app/Inferomics/page.tsx` (`PROFILES`).
+They are NOT stored in Firestore — the selected `profile_id` is stored in `objectives`.
 
-```typescript
-interface InferenceLog {
-  id: string;
-  timestamp: Timestamp;
-  weightPresetId?: string;         // Reference to weightPresets doc
-  accuracyWeight: number;
-  latencyWeight: number;
-  costWeight: number;
-  recommendedModelId: string;      // Which model won the scoring
-  recommendedModelName: string;    // Denormalized for easy display
-  projectedCostPer1MTokens: number;
-}
-```
+| ID | Name | n-exponent | Accuracy | Reliability | Performance | Cost |
+|---|---|---|---|---|---|---|
+| `bulk` | Bulk Processor | 1.0 | 10 | 10 | 30 | 50 |
+| `interactive` | Real-Time Interactive | 1.2 | 30 | 10 | 50 | 10 |
+| `analytical` | Analytical Agent | 1.5 | 40 | 20 | 20 | 20 |
+| `autonomous` | Autonomous Expert | 2.0 | 50 | 35 | 7.5 | 7.5 |
+
+**Economic Lever defaults per profile:**
+
+| Profile | Volume | Latency (ms) | Error Risk Cost |
+|---|---|---|---|
+| bulk | 1,000,000 | 250 | $0.05 |
+| interactive | 100,000 | 500 | $2.50 |
+| analytical | 10,000 | 5,000 | $25.00 |
+| autonomous | 1,000 | 30,000 | $100.00 |
 
 ---
 
-## Scoring Algorithm
+## Model Candidate Pool
 
-This is the core logic. Implement in a shared utility at `src/lib/scoring.ts`.
+Defined statically in `src/app/Inferomics/page.tsx` (`AVAILABLE_MODELS`). Not stored in Firestore.
+Selected model IDs are persisted via `objectives.selected_models[]`.
 
 ```typescript
-function scoreModels(
-  models: ModelConfig[],
-  weights: { accuracy: number; latency: number; cost: number }
-): (ModelConfig & { score: number })[] {
-  // 1. Normalize each metric to 0–1 across all models
-  const maxCost = Math.max(...models.map(m => m.costPer1MTokens));
-  const minCost = Math.min(...models.map(m => m.costPer1MTokens));
-  const maxLatency = Math.max(...models.map(m => m.latencyP50Ms));
-  const minLatency = Math.min(...models.map(m => m.latencyP50Ms));
-
-  // 2. Score each model
-  return models
-    .map(model => {
-      const normAccuracy = model.accuracyScore / 100;
-      const normLatency = (model.latencyP50Ms - minLatency) / (maxLatency - minLatency);
-      const normCost = (model.costPer1MTokens - minCost) / (maxCost - minCost);
-
-      const totalWeight = weights.accuracy + weights.latency + weights.cost;
-      const score =
-        (weights.accuracy / totalWeight) * normAccuracy +
-        (weights.latency / totalWeight) * (1 - normLatency) + // lower latency = better
-        (weights.cost / totalWeight) * (1 - normCost);        // lower cost = better
-
-      return { ...model, score };
-    })
-    .sort((a, b) => b.score - a.score); // highest score first
+interface ModelSpec {
+  id: string;         // Unique slug, e.g. 'llama-3-3-fast'
+  name: string;       // Display name, e.g. 'Llama-3.3-70B-Instruct'
+  provider: string;   // e.g. 'Meta', 'Qwen', 'DeepSeek'
+  type: string;       // 'Text-to-text' | 'Vision' | 'Embedding' | 'Safety guardrail'
+  priceIn: number;    // USD per 1M input tokens
+  priceOut: number;   // USD per 1M output tokens (0 for embedding models)
+  isFast: boolean;    // Whether this is the "Fast" tier variant
+  throughput: number; // Tokens/second (0 if not applicable)
 }
 ```
 
-The model at index 0 of the returned array is the recommended model.
+40+ models from providers including Meta, Qwen, DeepSeek, Google, NVIDIA, Moonshot AI, Z.ai, etc.
+Filtered in UI to `Text-to-text` and `Vision` types only (Embedding/Safety excluded from selection).
+Users select 2–5 models. Selection is locked after sampling.
+
+---
+
+## Scoring Algorithm (Proposed — not yet executed in backend)
+
+The scoring logic is outlined for future inference execution. Implement in `src/lib/scoring.ts`.
+
+**Total Economic Impact (TEI) formula:**
+
+```
+TEI = (avgTokenCost × projectedVolume) + ((1 - reliabilityRate) × volume × errorRiskCost)
+```
+
+**Weighted pillar score:**
+
+```
+score = (accuracyWeight / totalWeight × normAccuracy^n)
+      + (reliabilityWeight / totalWeight × normReliability^n)
+      + (performanceWeight / totalWeight × (1 − normLatency)^n)
+      + (costWeight / totalWeight × (1 − normCost)^n)
+```
+
+Where `n` is the profile exponent (1.0–2.0). Normalize each metric across all selected models before scoring.
+
+---
+
+## Cochran Sample Size Formula
+
+Implemented in `src/lib/statistics.ts`:
+
+```typescript
+function calculateCochran(
+  populationSize: number,   // N — total dataset records
+  marginOfError: number,    // e — 0.01 (High), 0.05 (Standard), 0.10 (Low)
+  confidenceLevel = 1.96    // Z — 95% confidence
+): number {
+  const p = 0.5;
+  const n0 = (Z² × p × (1-p)) / e²;       // infinite population baseline
+  const n  = n0 / (1 + (n0 - 1) / N);      // finite population correction
+  return Math.ceil(n);
+}
+```
+
+Demo mode hard cap: 25 records (`Math.min(cochranResult, 25)` when `NEXT_PUBLIC_APP_ENV=local`).
 
 ---
 
 ## Firestore Setup Notes
+
 - Use the default `(default)` database unless explicitly configured otherwise
 - Set `FIRESTORE_PROJECT_ID` in environment to your GCP project ID
-- For local dev: use Firestore emulator OR connect to live Firestore with a service account JSON
+- Local dev: connect to live Firestore with a service account JSON (`GOOGLE_APPLICATION_CREDENTIALS`)
 - Collections are created automatically on first write — no migrations needed
+- Always use `getFirestore()` from `src/lib/firebase-admin.ts` to get the client
+
+---
+
+## Deprecated Collections (v0.1 — do not use in new code)
+
+- `models` — replaced by static `AVAILABLE_MODELS` in page.tsx
+- `weightPresets` — replaced by `PROFILES` in page.tsx
+- `inferenceLogs` — not yet re-implemented (future phase)

@@ -1,15 +1,15 @@
 # Inferomics — Agent Reference (CLAUDE.md)
 
 ## What This Is
-A FinOps decision-engine POC for AI model selection. It enables Product and Engineering teams
-to choose inference models by balancing **Cost**, **Latency**, and **Accuracy** using weighted
-scoring — moving model selection from a pure engineering decision to a shared product discipline.
 
-This is an interview demo POC. Optimize for clarity and speed of iteration, not perfection.
+A FinOps decision-engine POC for AI model selection on Nebius Token Factory. Enables Product and
+Engineering teams to choose inference models by balancing **Cost**, **Latency**, **Accuracy**, and
+**Reliability** using weighted scoring. Optimize for clarity and speed of iteration, not perfection.
 
 ---
 
 ## Stack
+
 | Concern      | Choice                        | Why                              |
 |-------------|-------------------------------|----------------------------------|
 | Framework   | Next.js 15 (App Router)       | Full-stack, API routes built-in  |
@@ -19,24 +19,44 @@ This is an interview demo POC. Optimize for clarity and speed of iteration, not 
 | Utilities   | clsx + tailwind-merge         | Already installed                |
 | Database    | Firestore (Google Cloud)      | Serverless, free tier, zero ops  |
 | Deployment  | Google Cloud Run              | Container-native, free tier      |
+| Tokenizer   | gpt-tokenizer                 | Live token counting in UI        |
 
 ---
 
 ## File Structure
+
 ```
 src/
   app/
-    api/              ← All backend API routes go here
-    Inferomics/     ← Main active page (do not rename)
-    layout.tsx        ← Root layout — TopNav + Sidebar (do not restructure)
-    page.tsx          ← Redirects / → /Inferomics
-    globals.css       ← Design tokens and component classes (source of truth)
+    api/
+      datasets/           ← GET list of datasets; POST /upload for JSONL files
+      inferomics/
+        config/           ← Legacy config endpoint (use /api/objective instead)
+        sample/           ← POST: Cochran-sized sample generation from a dataset
+      objective/          ← GET/POST Firestore-backed session persistence
+    Inferomics/           ← Main active page (do not rename)
+      page.tsx            ← Full decision-engine UI (single "use client" component)
+    data-lab/datasets/    ← Data Lab upload UI
+    layout.tsx            ← Root layout — TopNav + Sidebar (do not restructure)
+    page.tsx              ← Redirects / → /Inferomics
+    globals.css           ← Design tokens and component classes (source of truth)
   components/
-    layout/           ← TopNav.tsx, Sidebar.tsx (structure is fixed)
-docs/                 ← Agent reference docs
-CLAUDE.md             ← This file
-.env.example          ← Required environment variables (never commit .env.local)
-Dockerfile            ← Cloud Run deployment
+    UploadModal.tsx        ← JSONL file upload modal component
+    layout/               ← TopNav.tsx, Sidebar.tsx (fixed structure)
+  context/
+    AppContext.tsx         ← Global state + Firestore auto-save (single source of truth)
+  lib/
+    firebase-admin.ts     ← Firestore singleton (HMR-safe globalThis pattern)
+    statistics.ts         ← calculateCochran() sample size formula
+    utils.ts              ← cn() helper (clsx + twMerge)
+  services/
+    storage.ts            ← Cloud Storage helpers for JSONL dataset blobs
+docs/                     ← Architecture, data model, design system, deployment
+CLAUDE.md                 ← This file
+AGENTS.md                 ← Jules agent config
+.env.example              ← Required environment variables (never commit .env.local)
+Dockerfile                ← Cloud Run deployment
+test-connections.ts       ← Standalone script: verify Firestore + Nebius connectivity
 ```
 
 ---
@@ -44,6 +64,7 @@ Dockerfile            ← Cloud Run deployment
 ## Design System — Always Follow These
 
 **Color Tokens (from globals.css @theme):**
+
 - Background: `#001A2B`
 - Surface: `#0D1117`
 - Border: `#1F2937`
@@ -52,79 +73,131 @@ Dockerfile            ← Cloud Run deployment
 - Text primary: `gray-200 / #e5e7eb`
 - Text muted: `gray-400 / gray-500`
 
-**Reusable CSS Classes (defined in globals.css — do not recreate inline):**
+**Reusable CSS Classes (globals.css — do not recreate inline):**
+
 - `.decision-card` — glassmorphism card with border
 - `.decision-card.recommended` — card with yellow-green glow border
 - `.custom-slider` — styled range input with purple thumb
 - `.btn-lift` — hover lift micro-interaction on buttons
 - `.status-pulse` — animated pulsing dot indicator
 - `.empty-dropzone` — dashed border empty state container
+- `.custom-scrollbar` — styled overflow scrollbar
+- `.lever-card` — card variant for Economic Lever inputs
 
 **Typography:**
+
 - Body: Inter (`var(--font-inter)`)
 - Headings: Montserrat (`var(--font-montserrat)`)
 - Monospace values (prices, scores): `font-mono` Tailwind class
 
 **Patterns:**
-- Use `clsx` + `twMerge` (imported as `cn()`) for conditional classes — see Sidebar.tsx
+
+- Use `clsx` + `twMerge` (imported as `cn()`) for conditional classes — see `utils.ts`
 - Use lucide-react for all icons, size 16 (inline) or 18 (nav)
 - Buttons: `bg-[#6B4EFF] hover:bg-[#5a41d9] text-white px-4 py-2 rounded-md font-medium text-sm`
 
 ---
 
+## Application Architecture
+
+### State Management
+
+All state lives in `AppContext.tsx`. Key behaviors:
+
+- **Hydration**: Loads from Firestore (`/api/objective?id=default`) on mount; migrates legacy `localStorage` automatically
+- **Auto-save**: Debounced 2-second save to Firestore on any state change
+- **Demo Reset**: `resetState()` blanks UI without wiping Firestore; `isResetForDemo` flag prevents overwriting
+
+### Implementation Profiles (4 total)
+
+| ID | Name | n-exponent | Pillar Priority |
+|---|---|---|---|
+| `bulk` | Bulk Processor | 1.0 | Cost > Performance > Accuracy/Reliability |
+| `interactive` | Real-Time Interactive | 1.2 | Performance > Accuracy > Cost/Reliability |
+| `analytical` | Analytical Agent | 1.5 | Balanced (Accuracy dominant) |
+| `autonomous` | Autonomous Expert | 2.0 | Accuracy > Reliability >> Cost/Performance |
+
+Selecting a profile auto-sets Economic Lever defaults.
+
+### Economic Levers
+
+Three configurable inputs that drive cost modeling:
+
+| Lever | Unit | Default | Purpose |
+|---|---|---|---|
+| Projected Monthly Volume | requests | 10,000 | Scale factor for spend |
+| Latency Tolerance | ms | 5,000 | Hard constraint for performance scoring |
+| Error Risk Cost | $ | 25.00 | Penalty per reliability failure |
+
+### Cochran Sample Size (`src/lib/statistics.ts`)
+
+```
+n0 = (Z² × p × q) / e²   ← infinite baseline
+n  = n0 / (1 + (n0-1)/N) ← finite correction
+```
+
+Accuracy tiers: High = 1% error, Standard = 5%, Low = 10%.
+
+---
+
 ## API Route Conventions
-All routes in `src/app/api/[resource]/route.ts`. Export named functions: `GET`, `POST`, `PUT`, `DELETE`.
 
-| Method | Route              | Purpose                               |
-|--------|-------------------|---------------------------------------|
-| GET    | /api/models        | List all model configs                |
-| POST   | /api/models        | Create a model config                 |
-| GET    | /api/recommend     | Get weighted recommendation           |
-| POST   | /api/weights       | Save a weight preset                  |
-| GET    | /api/weights       | Get all saved weight presets          |
+All routes in `src/app/api/[resource]/route.ts`. Export named functions: `GET`, `POST`.
 
-Query params for `/api/recommend`: `?accuracy=75&latency=40&cost=50`
+| Method | Route                    | Purpose                                   |
+|--------|--------------------------|-------------------------------------------|
+| GET    | /api/datasets            | List uploaded dataset metadata            |
+| POST   | /api/datasets/upload     | Upload JSONL to Cloud Storage             |
+| POST   | /api/inferomics/sample   | Generate Cochran sample from dataset      |
+| GET    | /api/objective           | Fetch Firestore-persisted session config  |
+| POST   | /api/objective           | Save/merge session config to Firestore    |
 
 ---
 
 ## Data Model Summary
-See `docs/DATA_MODEL.md` for full schema and seed data.
 
-**Firestore Collections:** `models` | `weightPresets` | `inferenceLogs`
+See `docs/DATA_MODEL.md` for full schema.
 
-**Core scoring formula:**
-```
-score = (accuracyWeight × normalizedAccuracy)
-      + (latencyWeight  × (1 − normalizedLatency))
-      + (costWeight     × (1 − normalizedCost))
-```
-Weights are 0–100 integers. Normalize each metric across all models before scoring.
+**Firestore Collections:**
+
+| Collection | Purpose |
+|---|---|
+| `objectives` | Session config persistence (doc ID: `'default'`) |
+| `datasets` | Uploaded JSONL dataset metadata |
+
+**`objectives` document fields:** `profile_id`, `master_prompt`, `selected_models[]`, `selected_dataset_id`, `accuracy`, `sampled_data`, `economic_levers.{volume, latency, error_cost}`, `updated_at`
+
+**Firestore Admin pattern:** Use `getFirestore()` from `src/lib/firebase-admin.ts` in all API routes. Never instantiate Firestore directly. Uses `globalThis` singleton to survive HMR in dev.
 
 ---
 
 ## Scope Boundaries
 
 **In scope:**
-- Model comparison with weighted scoring
-- Firestore CRUD for model configs
-- Save/load weight presets
-- Recommend optimal model from weights
+
+- Implementation Profile selection (4 profiles × 4 pillars)
+- Economic Lever configuration (volume, latency, error risk)
+- Model Candidate Pool (select 2–5 from 40+ AVAILABLE_MODELS)
+- Master System Prompt with live token count (gpt-tokenizer)
+- Dataset upload (JSONL) + Cochran sample size calculation
+- Firestore-backed session persistence with auto-save
+- Demo reset mode
 - Dockerfile + Cloud Run deployment
 
 **Out of scope (do not add):**
+
 - User authentication or login
-- File upload or CSV import
 - Charts or data visualizations
 - CI/CD pipeline or multiple environments
-- Error boundaries, loading skeletons, toast notifications
-- Any feature not directly related to the cost/latency/accuracy decision engine
+- Inference API calls to Nebius (future phase)
 
 ---
 
 ## Commands
+
 ```bash
 npm run dev              # Local dev server (default :3000)
-PORT=3001 npm run dev    # Local dev on alternate port
+PORT=3001 npm run dev    # Local dev on alternate port (preferred)
 npm run build            # Production build
 npm run start            # Start production server
 docker build -t inferomics .          # Build container
@@ -132,15 +205,20 @@ docker run -p 8080:8080 inferomics    # Run container locally
 gcloud run deploy inferomics \        # Deploy to Cloud Run
   --source . --region us-central1 \
   --allow-unauthenticated
+npx ts-node --esm test-connections.ts # Verify infra connectivity
 ```
 
 ---
 
 ## Environment Variables
-See `.env.example`. Never commit `.env.local`. For Cloud Run, set vars via GCP console or `gcloud run deploy --set-env-vars`.
 
-Required:
-- `NEXT_PUBLIC_APP_ENV` — `local` | `production`
-- `GOOGLE_APPLICATION_CREDENTIALS` — path to service account JSON (local only)
-- `FIRESTORE_PROJECT_ID` — GCP project ID
-- `FIRESTORE_DATABASE_ID` — Firestore database name (default: `(default)`)
+See `.env.example`. Never commit `.env.local`. For Cloud Run, set via GCP console or `gcloud run deploy --set-env-vars`.
+
+| Variable | Required | Description |
+|---|---|---|
+| `NEXT_PUBLIC_APP_ENV` | ✓ | `local` or `production` |
+| `GOOGLE_APPLICATION_CREDENTIALS` | local only | Path to service account JSON |
+| `FIRESTORE_PROJECT_ID` | ✓ | GCP project ID |
+| `FIRESTORE_DATABASE_ID` | ✓ | Firestore DB name (default: `(default)`) |
+| `GOOGLE_CLOUD_STORAGE_BUCKET` | ✓ | GCS bucket for JSONL dataset uploads |
+| `NEBIUS_API_KEY` | future | Nebius AI Studio API key |
