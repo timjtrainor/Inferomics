@@ -180,4 +180,24 @@ export class StorageService {
         }
         return null;
     }
+
+    /**
+     * Persists the inferomics configuration to disk.
+     */
+    static async saveConfig(config: Record<string, unknown>): Promise<void> {
+        const filePath = path.join(SAMPLES_DIR, 'inferomics-config.json');
+        fs.writeFileSync(filePath, JSON.stringify({ ...config, updatedAt: new Date().toISOString() }, null, 2));
+    }
+
+    /**
+     * Retrieves the persisted inferomics configuration.
+     */
+    static async getConfig(): Promise<Record<string, unknown> | null> {
+        const filePath = path.join(SAMPLES_DIR, 'inferomics-config.json');
+        if (fs.existsSync(filePath)) {
+            const content = fs.readFileSync(filePath, 'utf-8');
+            return JSON.parse(content);
+        }
+        return null;
+    }
 }
