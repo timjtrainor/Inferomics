@@ -45,6 +45,10 @@ interface AppContextType {
     saveStatus: 'IDLE' | 'SAVING' | 'SAVED';
     isResetForDemo: boolean;
     persistedConfig: PersistedConfig | null;
+    activeRunId: string;
+    setActiveRunId: (id: string) => void;
+    runStatus: 'IDLE' | 'PENDING' | 'RUNNING' | 'COMPLETE' | 'ERROR';
+    setRunStatus: (status: 'IDLE' | 'PENDING' | 'RUNNING' | 'COMPLETE' | 'ERROR') => void;
     restoreField: (key: 'masterPrompt' | 'selectedModels' | 'economicLevers' | 'all') => void;
     resetState: () => void;
 }
@@ -64,6 +68,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     const [isHydrated, setIsHydrated] = useState(false);
     const [isResetForDemo, setIsResetForDemo] = useState(false);
     const [saveStatus, setSaveStatus] = useState<'IDLE' | 'SAVING' | 'SAVED'>('IDLE');
+    const [activeRunId, setActiveRunId] = useState<string>('');
+    const [runStatus, setRunStatus] = useState<'IDLE' | 'PENDING' | 'RUNNING' | 'COMPLETE' | 'ERROR'>('IDLE');
     const isMounted = React.useRef(false);
     const saveTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
     const lastPersistedConfig = React.useRef<PersistedConfig | null>(null);
@@ -148,6 +154,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
                         if (data.economic_levers.latency) setLatencyTolerance(data.economic_levers.latency);
                         if (data.economic_levers.error_cost) setErrorRiskCost(data.economic_levers.error_cost);
                     }
+                    if (data.active_run_id) {
+                        setActiveRunId(data.active_run_id);
+                        setRunStatus('COMPLETE');
+                    }
                 }
             } catch (e) {
                 console.error('Hydration failed', e);
@@ -191,7 +201,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
                             volume: projectedVolume,
                             latency: latencyTolerance,
                             error_cost: errorRiskCost
-                        }
+                        },
+                        active_run_id: activeRunId
                     })
                 });
                 setSaveStatus('SAVED');
@@ -205,7 +216,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         return () => {
             if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         };
-    }, [selectedProfileId, masterPrompt, selectedModels, selectedDatasetId, accuracy, sampledData, projectedVolume, latencyTolerance, errorRiskCost, isHydrated, isResetForDemo]);
+    }, [selectedProfileId, masterPrompt, selectedModels, selectedDatasetId, accuracy, sampledData, projectedVolume, latencyTolerance, errorRiskCost, isHydrated, isResetForDemo, activeRunId]);
 
     // Smart defaults logic based on Objective
     useEffect(() => {
@@ -295,6 +306,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
             configStatus,
             saveStatus,
             isResetForDemo,
+            activeRunId,
+            setActiveRunId,
+            runStatus,
+            setRunStatus,
             persistedConfig: lastPersistedConfig.current,
             restoreField,
             resetState

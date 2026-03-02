@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { encode } from 'gpt-tokenizer';
-import { Settings, BarChart3, Zap, Database, ChevronDown, CheckCircle2, Search, TrendingUp, DollarSign, Activity, Cloud } from 'lucide-react';
+import { Settings, BarChart3, Zap, Database, ChevronDown, CheckCircle2, Search, TrendingUp, DollarSign, Activity, Cloud, Play, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppContext } from '@/context/AppContext';
 import { calculateCochran } from '@/lib/statistics';
@@ -31,54 +31,7 @@ interface Profile {
   };
 }
 
-const AVAILABLE_MODELS = [
-  { id: 'bge-icl', name: 'BGE-ICL', provider: 'BAAI', type: 'Embedding', priceIn: 0.01, priceOut: 0, isFast: false, throughput: 4096 },
-  { id: 'bge-multilingual', name: 'bge-multilingual-gemma2', provider: 'BAAI', type: 'Embedding', priceIn: 0.01, priceOut: 0, isFast: false, throughput: 0 },
-  { id: 'deepseek-r1-base', name: 'DeepSeek-R1-0528', provider: 'DeepSeek', type: 'Text-to-text', priceIn: 0.80, priceOut: 2.40, isFast: false, throughput: 20 },
-  { id: 'deepseek-r1-fast', name: 'DeepSeek-R1-0528', provider: 'DeepSeek', type: 'Text-to-text', priceIn: 2.00, priceOut: 6.00, isFast: true, throughput: 120 },
-  { id: 'deepseek-v3-base', name: 'DeepSeek-V3-0324', provider: 'DeepSeek', type: 'Text-to-text', priceIn: 0.50, priceOut: 1.50, isFast: false, throughput: 25 },
-  { id: 'deepseek-v3-fast', name: 'DeepSeek-V3-0324', provider: 'DeepSeek', type: 'Text-to-text', priceIn: 0.75, priceOut: 2.25, isFast: true, throughput: 120 },
-  { id: 'deepseek-v3.2', name: 'DeepSeek-V3.2', provider: 'DeepSeek', type: 'Text-to-text', priceIn: 0.30, priceOut: 0.45, isFast: false, throughput: 20 },
-  { id: 'e5-mistral', name: 'e5-mistral-7b-instruct', provider: 'intfloat', type: 'Embedding', priceIn: 0.01, priceOut: 0, isFast: false, throughput: 4096 },
-  { id: 'flux-dev', name: 'FLUX.1-dev', provider: 'Black Forest Labs', type: 'Text-to-image', priceIn: 0.007, priceOut: 0.02, isFast: false, throughput: 0 },
-  { id: 'flux-schnell', name: 'FLUX.1-schnell', provider: 'Black Forest Labs', type: 'Text-to-image', priceIn: 0.001, priceOut: 0.01, isFast: false, throughput: 0 },
-  { id: 'gemma-2-2b', name: 'Gemma-2-2b-it', provider: 'Google', type: 'Text-to-text', priceIn: 0.02, priceOut: 0.06, isFast: false, throughput: 80 },
-  { id: 'gemma-2-9b', name: 'Gemma-2-9b-it', provider: 'Google', type: 'Text-to-text', priceIn: 0.03, priceOut: 0.09, isFast: true, throughput: 90 },
-  { id: 'gemma-3-base', name: 'Gemma-3-27b-it', provider: 'Google', type: 'Vision', priceIn: 0.10, priceOut: 0.30, isFast: false, throughput: 20 },
-  { id: 'gemma-3-fast', name: 'Gemma-3-27b-it', provider: 'Google', type: 'Vision', priceIn: 0.20, priceOut: 0.60, isFast: true, throughput: 55 },
-  { id: 'glm-4.5', name: 'GLM-4.5', provider: 'Z.ai', type: 'Text-to-text', priceIn: 0.60, priceOut: 2.20, isFast: false, throughput: 30 },
-  { id: 'glm-4.5-air', name: 'GLM-4.5-Air', provider: 'Z.ai', type: 'Text-to-text', priceIn: 0.20, priceOut: 1.20, isFast: false, throughput: 25 },
-  { id: 'glm-4.7', name: 'GLM-4.7', provider: 'Z.ai', type: 'Text-to-text', priceIn: 0.40, priceOut: 2.00, isFast: false, throughput: 30 },
-  { id: 'gpt-oss-120b', name: 'gpt-oss-120b', provider: 'OpenAI', type: 'Text-to-text', priceIn: 0.15, priceOut: 0.60, isFast: false, throughput: 40 },
-  { id: 'gpt-oss-20b', name: 'gpt-oss-20b', provider: 'OpenAI', type: 'Text-to-text', priceIn: 0.05, priceOut: 0.20, isFast: false, throughput: 64 },
-  { id: 'hermes-4-405b', name: 'Hermes-4-405B', provider: 'NousResearch', type: 'Text-to-text', priceIn: 1.00, priceOut: 3.00, isFast: false, throughput: 20 },
-  { id: 'hermes-4-70b', name: 'Hermes-4-70B', provider: 'NousResearch', type: 'Text-to-text', priceIn: 0.13, priceOut: 0.40, isFast: false, throughput: 20 },
-  { id: 'intellect-3', name: 'INTELLECT-3', provider: 'Prime Intellect', type: 'Text-to-text', priceIn: 0.20, priceOut: 1.10, isFast: false, throughput: 35 },
-  { id: 'kimi-k2-instruct', name: 'Kimi-K2-Instruct', provider: 'Moonshot AI', type: 'Text-to-text', priceIn: 0.50, priceOut: 2.40, isFast: false, throughput: 40 },
-  { id: 'kimi-k2-thinking', name: 'Kimi-K2-Thinking', provider: 'Moonshot AI', type: 'Text-to-text', priceIn: 0.60, priceOut: 2.50, isFast: false, throughput: 45.7 },
-  { id: 'kimi-k2.5', name: 'Kimi-K2.5', provider: 'Moonshot AI', type: 'Text-to-text', priceIn: 0.50, priceOut: 2.50, isFast: false, throughput: 60 },
-  { id: 'llama-3-1-nemotron', name: 'Llama-3_1-Nemotron-Ultra-253B-v1', provider: 'NVIDIA', type: 'Text-to-text', priceIn: 0.60, priceOut: 1.80, isFast: false, throughput: 25 },
-  { id: 'llama-3-3-base', name: 'Llama-3.3-70B-Instruct', provider: 'Meta', type: 'Text-to-text', priceIn: 0.13, priceOut: 0.40, isFast: false, throughput: 25 },
-  { id: 'llama-3-3-fast', name: 'Llama-3.3-70B-Instruct', provider: 'Meta', type: 'Text-to-text', priceIn: 0.25, priceOut: 0.75, isFast: true, throughput: 120 },
-  { id: 'meta-llama-8b-base', name: 'Meta-Llama-3.1-8B-Instruct', provider: 'Meta', type: 'Text-to-text', priceIn: 0.02, priceOut: 0.06, isFast: false, throughput: 30 },
-  { id: 'meta-llama-8b-fast', name: 'Meta-Llama-3.1-8B-Instruct', provider: 'Meta', type: 'Text-to-text', priceIn: 0.03, priceOut: 0.09, isFast: true, throughput: 155 },
-  { id: 'llama-guard-3', name: 'Meta-Llama-Guard-3-8B', provider: 'Meta', type: 'Safety guardrail', priceIn: 0.02, priceOut: 0.06, isFast: false, throughput: 118 },
-  { id: 'minimax-m2.1', name: 'MiniMax-M2.1', provider: 'Minimax', type: 'Text-to-text', priceIn: 0.30, priceOut: 1.20, isFast: false, throughput: 36.8 },
-  { id: 'nemotron-3-nano', name: 'Nemotron-3-Nano-30B-A3B', provider: 'NVIDIA', type: 'Text-to-text', priceIn: 0.06, priceOut: 0.24, isFast: false, throughput: 60 },
-  { id: 'nemotron-nano', name: 'Nemotron-Nano-V2-12b', provider: 'NVIDIA', type: 'Vision', priceIn: 0.07, priceOut: 0.20, isFast: false, throughput: 70 },
-  { id: 'qwen-coder-7b-fast', name: 'Qwen2.5-Coder-7B', provider: 'Qwen', type: 'Text-to-text', priceIn: 0.03, priceOut: 0.09, isFast: true, throughput: 125 },
-  { id: 'qwen-vl-72b', name: 'Qwen2.5-VL-72B-Instruct', provider: 'Qwen', type: 'Vision', priceIn: 0.25, priceOut: 0.75, isFast: false, throughput: 20 },
-  { id: 'qwen3-235b-instruct', name: 'Qwen3-235B-A22B-Instruct-2507', provider: 'Qwen', type: 'Text-to-text', priceIn: 0.20, priceOut: 0.60, isFast: false, throughput: 27 },
-  { id: 'qwen3-235b-thinking', name: 'Qwen3-235B-A22B-Thinking-2507', provider: 'Qwen', type: 'Text-to-text', priceIn: 0.20, priceOut: 0.80, isFast: false, throughput: 27 },
-  { id: 'qwen3-30b-instruct', name: 'Qwen3-30B-A3B-Instruct-2507', provider: 'Qwen', type: 'Text-to-text', priceIn: 0.10, priceOut: 0.30, isFast: false, throughput: 70 },
-  { id: 'qwen3-30b-thinking', name: 'Qwen3-30B-A3B-Thinking-2507', provider: 'Qwen', type: 'Text-to-text', priceIn: 0.10, priceOut: 0.30, isFast: false, throughput: 56 },
-  { id: 'qwen3-32b-base', name: 'Qwen3-32B', provider: 'Qwen', type: 'Text-to-text', priceIn: 0.10, priceOut: 0.30, isFast: false, throughput: 23 },
-  { id: 'qwen3-32b-fast', name: 'Qwen3-32B', provider: 'Qwen', type: 'Text-to-text', priceIn: 0.20, priceOut: 0.60, isFast: true, throughput: 110 },
-  { id: 'qwen3-coder-30b', name: 'Qwen3-Coder-30B-A3B-Instruct', provider: 'Qwen', type: 'Text-to-text', priceIn: 0.10, priceOut: 0.30, isFast: false, throughput: 60 },
-  { id: 'qwen3-coder-480b', name: 'Qwen3-Coder-480B-A35B-Instruct', provider: 'Qwen', type: 'Text-to-text', priceIn: 0.40, priceOut: 1.80, isFast: false, throughput: 35 },
-  { id: 'qwen-embedding', name: 'Qwen3-Embedding-8B', provider: 'Qwen', type: 'Embedding', priceIn: 0.01, priceOut: 0, isFast: false, throughput: 4096 },
-  { id: 'qwen3-next-80b', name: 'Qwen3-Next-80B-A3B-Thinking', provider: 'Qwen', type: 'Text-to-text', priceIn: 0.15, priceOut: 1.20, isFast: false, throughput: 85 },
-];
+// Hardcoded AVAILABLE_MODELS removed - now fetched dynamically from /api/models
 
 const PROFILES: Profile[] = [
   {
@@ -204,6 +157,26 @@ function LeverInput({ label, icon, value, onChange, unit, description, colorClas
   );
 }
 
+
+type BenchmarkMetrics = {
+  accuracy: number;
+  total_cost: number;
+  avg_latency: number;
+  processed_count: number;
+};
+
+type NebiusModel = {
+  id: string;
+  name: string;
+  provider: string;
+  priceIn?: number;
+  priceOut?: number;
+  description?: string;
+  context_window?: number;
+  isFast?: boolean;
+  type?: string;
+};
+
 export default function InferomicsPage() {
   const {
     selectedDatasetId,
@@ -228,12 +201,61 @@ export default function InferomicsPage() {
     saveStatus,
     isResetForDemo,
     persistedConfig,
-    restoreField
+    restoreField,
+    activeRunId,
+    setActiveRunId,
+    runStatus,
+    setRunStatus,
   } = useAppContext();
+
+  const handleRunDiscovery = async () => {
+    if (configStatus !== 'COMPLETE') return;
+
+    setRunStatus('PENDING');
+    try {
+      // 1. Create the Run record
+      const createRes = await fetch('/api/objective/run/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          objectiveId: 'default',
+          modelIds: selectedModels
+        })
+      });
+      const { runId } = await createRes.json();
+      setActiveRunId(runId);
+
+      setRunStatus('RUNNING');
+
+      // 2. Trigger the actual Engine (async)
+      const runRes = await fetch('/api/inferomics/run', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          objectiveId: 'default',
+          runId,
+          selectedModels,
+          datasetId: selectedDatasetId,
+          accuracy
+        })
+      });
+
+      const result = await runRes.json();
+      if (result.success) {
+        setRunStatus('COMPLETE');
+      } else {
+        setRunStatus('ERROR');
+      }
+    } catch (error) {
+      console.error('Failed to run discovery:', error);
+      setRunStatus('ERROR');
+    }
+  };
 
   const [localPrompt, setLocalPrompt] = useState(masterPrompt);
   const [tokenCount, setTokenCount] = useState(0);
   const [modelSearch, setModelSearch] = useState('');
+  const [runResults, setRunResults] = useState<Record<string, BenchmarkMetrics> | null>(null);
 
   // Sync from context on load
   useEffect(() => {
@@ -245,8 +267,29 @@ export default function InferomicsPage() {
     masterPromptRef.current = masterPrompt;
   }, [masterPrompt]);
 
+  // If a run completes, fetch the detailed metrics
+  useEffect(() => {
+    if (runStatus === 'COMPLETE' && activeRunId) {
+      const fetchResults = async () => {
+        try {
+          const res = await fetch(`/api/objective/run/status?runId=${activeRunId}`);
+          const data = await res.json();
+          if (data.success && data.run?.metrics) {
+            setRunResults(data.run.metrics);
+          }
+        } catch (e) {
+          console.error('Failed to fetch run metrics:', e);
+        }
+      };
+      fetchResults();
+    } else if (runStatus === 'RUNNING' || runStatus === 'PENDING') {
+      setRunResults(null);
+    }
+  }, [runStatus, activeRunId]);
+
   // Handle token counting and debounced save
   useEffect(() => {
+    // ... rest of the existing useEffect code ...
     // If empty, update immediately for better UX responsiveness
     if (!localPrompt.trim()) {
       setTokenCount(0);
@@ -290,16 +333,9 @@ export default function InferomicsPage() {
     }
   };
 
-  const filteredModels = useMemo(() => {
-    return AVAILABLE_MODELS.filter(m =>
-      (m.type === 'Text-to-text' || m.type === 'Vision') &&
-      (m.name.toLowerCase().includes(modelSearch.toLowerCase()) ||
-        m.provider.toLowerCase().includes(modelSearch.toLowerCase()))
-    );
-  }, [modelSearch]);
-
   const [datasets, setDatasets] = useState<Dataset[]>([]);
-  const [isSampling, setIsSampling] = useState(false);
+  const [availableModels, setAvailableModels] = useState<NebiusModel[]>([]);
+  const [isModelsLoading, setIsModelsLoading] = useState(true);
 
   const selectedProfile = PROFILES.find(p => p.id === selectedProfileId) || PROFILES[2];
 
@@ -316,13 +352,34 @@ export default function InferomicsPage() {
   const isSessionLocked = !!sampledData;
   const isDataSelectionLocked = isSessionLocked || configStatus === 'DRAFT';
 
+  const filteredModels = useMemo(() => {
+    return availableModels.filter(m =>
+      m.name.toLowerCase().includes(modelSearch.toLowerCase()) ||
+      m.provider.toLowerCase().includes(modelSearch.toLowerCase())
+    );
+  }, [modelSearch, availableModels]);
+  const [isSampling, setIsSampling] = useState(false);
+
   useEffect(() => {
+    // 1. Fetch Datasets
     fetch('/api/datasets')
       .then(res => res.json())
       .then(data => {
         if (data.datasets) setDatasets(data.datasets);
       })
       .catch(console.error);
+
+    // 2. Fetch Dynamic Models from Nebius
+    setIsModelsLoading(true);
+    fetch('/api/models')
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setAvailableModels(data.models);
+        }
+      })
+      .catch(console.error)
+      .finally(() => setIsModelsLoading(false));
   }, []);
 
   const handleSample = async () => {
@@ -587,61 +644,66 @@ export default function InferomicsPage() {
             </div>
 
             <div className="flex-grow overflow-y-auto space-y-2 pr-2 custom-scrollbar border-t border-[#1F2937] pt-2 max-h-[400px]">
-              {filteredModels.map(model => {
-                const isSelected = selectedModels.includes(model.id);
-                const isDisabled = isSessionLocked || (!isSelected && selectedModels.length >= 5);
+              {isModelsLoading ? (
+                // Loading Skeleton
+                Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="w-full h-20 bg-[#1F2937] border border-[#374151] rounded-lg animate-pulse" />
+                ))
+              ) : (
+                filteredModels.map(model => {
+                  const isSelected = selectedModels.includes(model.id);
+                  const isDisabled = isSessionLocked || (!isSelected && selectedModels.length >= 5);
 
-                return (
-                  <button
-                    key={model.id}
-                    onClick={() => toggleModel(model.id)}
-                    disabled={isDisabled}
-                    aria-pressed={isSelected}
-                    aria-label={`${model.name} by ${model.provider} — ${model.isFast ? 'Fast' : 'Base'} tier`}
-                    className={cn(
-                      "w-full flex items-center justify-between p-3 rounded-lg border text-left transition-all relative overflow-hidden",
-                      isSelected
-                        ? "bg-[#6B4EFF]/10 border-[#6B4EFF] shadow-sm shadow-[#6B4EFF]/10"
-                        : "bg-[#1F2937] border-[#374151] hover:border-gray-600",
-                      isDisabled && !isSelected && "opacity-50 cursor-not-allowed"
-                    )}
-                  >
-                    <div className="flex-grow">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold text-white">{model.name}</span>
-                        {model.isFast ? (
-                          <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-[#6B4EFF]/20 text-[#6B4EFF] border border-[#6B4EFF]/30">Fast</span>
-                        ) : (
-                          <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-gray-500/10 text-gray-400 border border-gray-500/20">Base</span>
-                        )}
-                      </div>
-                      <div className="text-[11px] text-gray-500 mt-0.5 font-medium">
-                        {model.provider} &middot; {model.type}
-                      </div>
-                      <div className="flex gap-3 mt-2 font-mono text-[10px]">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-gray-500">In:</span>
-                          <span className="text-[#E0FF4F]">${model.priceIn.toFixed(2)}/1M</span>
+                  return (
+                    <button
+                      key={model.id}
+                      onClick={() => toggleModel(model.id)}
+                      disabled={isDisabled}
+                      className={cn(
+                        "w-full flex items-center justify-between p-3 rounded-lg border text-left transition-all relative overflow-hidden",
+                        isSelected
+                          ? "bg-[#6B4EFF]/10 border-[#6B4EFF] shadow-sm shadow-[#6B4EFF]/10"
+                          : "bg-[#1F2937] border-[#374151] hover:border-gray-600",
+                        isDisabled && !isSelected && "opacity-50 cursor-not-allowed"
+                      )}
+                    >
+                      <div className="flex-grow">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-white">{model.name}</span>
+                          {model.isFast ? (
+                            <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-[#6B4EFF]/20 text-[#6B4EFF] border border-[#6B4EFF]/30">Fast</span>
+                          ) : (
+                            <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-gray-500/10 text-gray-400 border border-gray-500/20">Base</span>
+                          )}
                         </div>
-                        {model.priceOut > 0 && (
+                        <div className="text-[11px] text-gray-500 mt-0.5 font-medium">
+                          {model.provider} &middot; {model.type}
+                        </div>
+                        <div className="flex gap-3 mt-2 font-mono text-[10px]">
                           <div className="flex items-center gap-1.5">
-                            <span className="text-gray-500">Out:</span>
-                            <span className="text-[#6B4EFF]">${model.priceOut.toFixed(2)}/1M</span>
+                            <span className="text-gray-500">In:</span>
+                            <span className="text-[#E0FF4F]">${(model.priceIn || 0).toFixed(2)}/1M</span>
                           </div>
-                        )}
-                        {model.throughput > 0 && (
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-gray-500">Speed:</span>
-                            <span className="text-gray-300">{model.throughput} Tok/s</span>
-                          </div>
-                        )}
+                          {model.priceOut !== undefined && model.priceOut > 0 && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-gray-500">Out:</span>
+                              <span className="text-[#6B4EFF]">${(model.priceOut || 0).toFixed(2)}/1M</span>
+                            </div>
+                          )}
+                          {model.context_window !== undefined && model.context_window > 0 && (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-gray-500">Ctx:</span>
+                              <span className="text-gray-300">{Math.round((model.context_window || 0) / 1024)}k</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                    {isSelected && <CheckCircle2 className="text-[#E0FF4F]" size={18} />}
-                  </button>
-                );
-              })}
-              {filteredModels.length === 0 && (
+                      {isSelected && <CheckCircle2 className="text-[#E0FF4F]" size={18} />}
+                    </button>
+                  );
+                })
+              )}
+              {!isModelsLoading && filteredModels.length === 0 && (
                 <div className="text-center text-sm text-gray-500 py-4">No models found matching &quot;{modelSearch}&quot;</div>
               )}
             </div>
@@ -796,11 +858,187 @@ export default function InferomicsPage() {
                   </div>
                 </div>
 
+                {sampledData && (
+                  <div className="pt-4 animate-in fade-in zoom-in duration-700">
+                    <button
+                      onClick={handleRunDiscovery}
+                      disabled={configStatus !== 'COMPLETE' || runStatus === 'PENDING' || runStatus === 'RUNNING'}
+                      className={cn(
+                        "w-full py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-all duration-300 shadow-2xl overflow-hidden relative group",
+                        configStatus !== 'COMPLETE'
+                          ? "bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700"
+                          : runStatus === 'PENDING' || runStatus === 'RUNNING'
+                            ? "bg-[#6B4EFF]/20 text-[#6B4EFF] border border-[#6B4EFF]/30 cursor-wait"
+                            : runStatus === 'COMPLETE'
+                              ? "bg-green-500/10 text-green-400 border border-green-500/50"
+                              : "bg-[#E0FF4F] text-[#0D1117] hover:bg-[#d0f040] hover:scale-[1.02] active:scale-[0.98] shadow-[#E0FF4F]/20"
+                      )}
+                    >
+                      {runStatus === 'PENDING' || runStatus === 'RUNNING' ? (
+                        <>
+                          <Loader2 className="animate-spin" size={20} />
+                          <span className="uppercase tracking-widest text-sm">Engine Executing...</span>
+                          <div className="absolute bottom-0 left-0 h-1 bg-[#6B4EFF] animate-[shimmer_2s_infinite]"></div>
+                        </>
+                      ) : runStatus === 'COMPLETE' ? (
+                        <>
+                          <CheckCircle2 size={20} />
+                          <span className="uppercase tracking-widest text-sm">Run Complete</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play size={20} className="fill-current" />
+                          <span className="uppercase tracking-widest text-sm">Run Discovery Engine</span>
+                        </>
+                      )}
+                    </button>
+
+                    {configStatus !== 'COMPLETE' && (
+                      <p className="text-[10px] text-gray-500 uppercase tracking-tighter mt-2 font-mono">
+                        Configure 2-5 models and Master Prompt to unlock Engine
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Discovery Results Dashboard */}
+      {runResults && (
+        <div className="mt-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
+          <div className="bg-[#0D1117] border border-[#6B4EFF]/30 rounded-2xl overflow-hidden shadow-2xl shadow-[#6B4EFF]/10">
+            <div className="bg-[#6B4EFF]/10 px-8 py-5 border-b border-[#6B4EFF]/20 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="bg-[#6B4EFF] p-2 rounded-lg">
+                  <BarChart3 className="text-white" size={20} />
+                </div>
+                <div>
+                  <h2 className="text-xl font-bold text-white tracking-tight">Discovery Engine Results</h2>
+                  <p className="text-xs text-[#6B4EFF] uppercase tracking-widest font-bold">Inference Batch {activeRunId}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="text-right">
+                  <p className="text-[10px] text-gray-400 uppercase tracking-widest">Run Status</p>
+                  <div className="flex items-center gap-2 justify-end">
+                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                    <span className="text-sm font-mono text-green-400 font-bold">LIVE DATA PERSISTED</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                {/* Global Metrics Summary */}
+                <div className="bg-[#1F2937]/30 rounded-xl p-5 border border-[#374151]/50">
+                  <div className="flex items-center gap-3 mb-3">
+                    <TrendingUp className="text-[#E0FF4F]" size={18} />
+                    <span className="text-sm text-gray-400 font-medium">Top Accuracy</span>
+                  </div>
+                  <div className="text-3xl font-mono text-white">
+                    {Math.max(...Object.values(runResults).map((m: BenchmarkMetrics) => m.accuracy))}%
+                  </div>
+                </div>
+                <div className="bg-[#1F2937]/30 rounded-xl p-5 border border-[#374151]/50">
+                  <div className="flex items-center gap-3 mb-3">
+                    <DollarSign className="text-green-400" size={18} />
+                    <span className="text-sm text-gray-400 font-medium">Avg. Efficiency</span>
+                  </div>
+                  <div className="text-3xl font-mono text-white">
+                    ${(Object.values(runResults).reduce((acc: number, m: BenchmarkMetrics) => acc + m.total_cost, 0) / Object.keys(runResults).length).toFixed(4)}
+                  </div>
+                </div>
+                <div className="bg-[#1F2937]/30 rounded-xl p-5 border border-[#374151]/50">
+                  <div className="flex items-center gap-3 mb-3">
+                    <Activity className="text-blue-400" size={18} />
+                    <span className="text-sm text-gray-400 font-medium">Global Latency</span>
+                  </div>
+                  <div className="text-3xl font-mono text-white">
+                    {(Object.values(runResults).reduce((acc: number, m: BenchmarkMetrics) => acc + m.avg_latency, 0) / Object.keys(runResults).length).toFixed(0)}<span className="text-sm text-gray-500 ml-1">ms</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-[#1F2937] text-gray-500 text-[10px] uppercase tracking-[0.2em] font-bold">
+                      <th className="pb-4 pl-4">Model Candidate</th>
+                      <th className="pb-4">Accuracy</th>
+                      <th className="pb-4">Latency (avg)</th>
+                      <th className="pb-4">Cost (per 1M)</th>
+                      <th className="pb-4">Est. Project Cost</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#1F2937]">
+                    {Object.entries(runResults).map(([modelId, metrics]: [string, BenchmarkMetrics]) => {
+                      const modelData = availableModels.find(m => m.id === modelId);
+                      const accuracyColor = metrics.accuracy > 90 ? 'text-green-400' : metrics.accuracy > 70 ? 'text-[#E0FF4F]' : 'text-orange-400';
+
+                      // Calculate projected cost based on user's economic levers
+                      const estMonthlyCost = (metrics.total_cost / metrics.processed_count) * projectedVolume;
+
+                      return (
+                        <tr key={modelId} className="group hover:bg-[#1F2937]/20 transition-colors">
+                          <td className="py-5 pl-4">
+                            <div className="flex flex-col">
+                              <span className="text-white font-bold tracking-tight">{modelData?.name || modelId}</span>
+                              <span className="text-[10px] text-gray-500 font-mono">{modelId}</span>
+                            </div>
+                          </td>
+                          <td className="py-5">
+                            <div className="flex items-center gap-3">
+                              <div className="w-16 h-1.5 bg-[#1F2937] rounded-full overflow-hidden">
+                                <div
+                                  className={cn("h-full rounded-full transition-all duration-1000", metrics.accuracy > 70 ? "bg-[#E0FF4F]" : "bg-orange-500")}
+                                  style={{ width: `${metrics.accuracy}%` }}
+                                />
+                              </div>
+                              <span className={cn("font-mono font-bold", accuracyColor)}>{metrics.accuracy}%</span>
+                            </div>
+                          </td>
+                          <td className="py-5">
+                            <div className="flex items-center gap-2">
+                              <span className="text-white font-mono">{Math.round(metrics.avg_latency)}ms</span>
+                              {metrics.avg_latency < latencyTolerance ? (
+                                <Zap size={12} className="text-[#E0FF4F] fill-[#E0FF4F]" />
+                              ) : (
+                                <Activity size={12} className="text-orange-400" />
+                              )}
+                            </div>
+                          </td>
+                          <td className="py-5">
+                            <span className="text-gray-400 font-mono text-sm">${(metrics.total_cost / (metrics.processed_count || 1) * 1000000).toFixed(2)}</span>
+                          </td>
+                          <td className="py-5">
+                            <div className="flex flex-col">
+                              <span className="text-white font-mono font-bold">${estMonthlyCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                              <span className="text-[8px] text-gray-500 uppercase tracking-widest">Monthly projected</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-8 pt-6 border-t border-[#1F2937] flex items-center justify-between">
+                <p className="text-[10px] text-gray-500 font-mono uppercase tracking-widest">
+                  Result generated using scientific sample of {sampledData?.sampleSize || 0} records
+                </p>
+                <div className="flex gap-4">
+                  <button className="text-[10px] text-[#6B4EFF] font-bold uppercase tracking-widest hover:text-white transition-colors">Export RAW JSON</button>
+                  <button className="text-[10px] text-[#6B4EFF] font-bold uppercase tracking-widest hover:text-white transition-colors">Compare History</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div >
   );
