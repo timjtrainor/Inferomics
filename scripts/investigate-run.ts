@@ -1,4 +1,4 @@
-import { getFirestore } from './src/lib/firebase-admin';
+import { getFirestore } from '../src/lib/firebase-admin';
 import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 

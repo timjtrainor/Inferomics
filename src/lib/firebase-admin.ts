@@ -32,11 +32,8 @@ const globalWithFirestore = globalThis as unknown as {
 };
 
 export const getFirestore = (): Firestore => {
-    if (process.env.NODE_ENV === 'development') {
-        if (!globalWithFirestore.firestore) {
-            globalWithFirestore.firestore = getFirestoreInstance();
-        }
-        return globalWithFirestore.firestore;
+    if (!globalWithFirestore.firestore) {
+        globalWithFirestore.firestore = getFirestoreInstance();
     }
-    return getFirestoreInstance();
+    return globalWithFirestore.firestore;
 };
