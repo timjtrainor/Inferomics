@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { encode } from 'gpt-tokenizer';
 import { Settings, BarChart3, Zap, Database, ChevronDown, CheckCircle2, Search, TrendingUp, DollarSign, Activity, Cloud, Play, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -160,8 +161,11 @@ function LeverInput({ label, icon, value, onChange, unit, description, colorClas
 
 type BenchmarkMetrics = {
   accuracy: number;
+  reliability: number;
   total_cost: number;
   avg_latency: number;
+  tei: number;
+  ies: number;
   processed_count: number;
 };
 
@@ -178,6 +182,14 @@ type NebiusModel = {
 };
 
 export default function InferomicsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-black flex items-center justify-center text-white">Loading Discovery Engine...</div>}>
+      <InferomicsContent />
+    </Suspense>
+  );
+}
+
+function InferomicsContent() {
   const {
     selectedDatasetId,
     setSelectedDatasetId,
@@ -208,8 +220,19 @@ export default function InferomicsPage() {
     setRunStatus,
   } = useAppContext();
 
+  const searchParams = useSearchParams();
+  const urlRunId = searchParams.get('runId');
+
+  // Handle URL-based direct access to a run
+  useEffect(() => {
+    if (urlRunId && urlRunId !== activeRunId) {
+      setActiveRunId(urlRunId);
+      setRunStatus('COMPLETE');
+    }
+  }, [urlRunId, activeRunId, setActiveRunId, setRunStatus]);
+
   const handleRunDiscovery = async () => {
-    if (configStatus !== 'COMPLETE') return;
+    if (configStatus !== 'COMPLETE' || runStatus === 'COMPLETE' || runStatus === 'RUNNING' || runStatus === 'PENDING') return;
 
     setRunStatus('PENDING');
     try {
@@ -289,7 +312,6 @@ export default function InferomicsPage() {
 
   // Handle token counting and debounced save
   useEffect(() => {
-    // ... rest of the existing useEffect code ...
     // If empty, update immediately for better UX responsiveness
     if (!localPrompt.trim()) {
       setTokenCount(0);
@@ -313,6 +335,52 @@ export default function InferomicsPage() {
 
     return () => clearTimeout(timer);
   }, [localPrompt, setMasterPrompt]);
+
+  // Recalculate metrics dynamically based on levers and profile weights
+  const dynamicResults = useMemo(() => {
+    if (!runResults) return null;
+
+    const profile = PROFILES.find(p => p.id === selectedProfileId) || PROFILES[2]; // fallback to analytical
+    const { weights } = profile.config;
+    const totalWeight = weights.accuracy + weights.reliability + weights.cost + weights.performance;
+
+    // Normalize weights
+    const wa = weights.accuracy / totalWeight;
+    const wr = weights.reliability / totalWeight;
+    const wc = weights.cost / totalWeight;
+    const wl = weights.performance / totalWeight;
+
+    const entries = Object.entries(runResults);
+    const maxLatency = Math.max(...entries.map(([, m]) => m.avg_latency)) || 1;
+    const maxCost = Math.max(...entries.map(([, m]) => m.total_cost || 0.01)) || 0.01;
+
+    const updated: Record<string, BenchmarkMetrics> = {};
+
+    for (const [modelId, m] of entries) {
+      // 1. Recalculate TEI
+      // TotalCost + ((1 - Accuracy) * ProjectedVolume * ErrorRiskCost)
+      const accDecimal = m.accuracy / 100;
+      const dynamicTei = m.total_cost + ((1 - accDecimal) * projectedVolume * errorRiskCost);
+
+      // 2. Recalculate IES
+      const nl = m.avg_latency / maxLatency;
+      const nc = (m.total_cost || 0) / maxCost;
+
+      const reliabilityDecimal = (m.reliability ?? 100) / 100;
+      const numerator = (accDecimal * wa) + (reliabilityDecimal * wr);
+      const denominator = (nl * wl) + (nc * wc) + 0.01;
+      const dynamicIes = numerator / denominator;
+
+      updated[modelId] = {
+        ...m,
+        tei: Math.round(dynamicTei * 100) / 100,
+        ies: Math.round(dynamicIes * 100) / 100
+      };
+    }
+
+    return updated;
+  }, [runResults, selectedProfileId, projectedVolume, errorRiskCost]);
+
 
   // Persistence is now unified in AppContext via /api/objective.
   // The redundant /api/inferomics/config logic is removed.
@@ -349,7 +417,7 @@ export default function InferomicsPage() {
     return calculateCochran(selectedDataset.recordCount, marginOfError);
   }, [selectedDataset, accuracy]);
 
-  const isSessionLocked = !!sampledData;
+  const isSessionLocked = !!sampledData || runStatus === 'COMPLETE' || runStatus === 'RUNNING' || runStatus === 'PENDING';
   const isDataSelectionLocked = isSessionLocked || configStatus === 'DRAFT';
 
   const filteredModels = useMemo(() => {
@@ -883,7 +951,7 @@ export default function InferomicsPage() {
                       ) : runStatus === 'COMPLETE' ? (
                         <>
                           <CheckCircle2 size={20} />
-                          <span className="uppercase tracking-widest text-sm">Run Complete</span>
+                          <span className="uppercase tracking-widest text-sm">Baseline Established</span>
                         </>
                       ) : (
                         <>
@@ -907,7 +975,7 @@ export default function InferomicsPage() {
       </div>
 
       {/* Discovery Results Dashboard */}
-      {runResults && (
+      {dynamicResults && (
         <div className="mt-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
           <div className="bg-[#0D1117] border border-[#6B4EFF]/30 rounded-2xl overflow-hidden shadow-2xl shadow-[#6B4EFF]/10">
             <div className="bg-[#6B4EFF]/10 px-8 py-5 border-b border-[#6B4EFF]/20 flex items-center justify-between">
@@ -940,25 +1008,34 @@ export default function InferomicsPage() {
                     <span className="text-sm text-gray-400 font-medium">Top Accuracy</span>
                   </div>
                   <div className="text-3xl font-mono text-white">
-                    {Math.max(...Object.values(runResults).map((m: BenchmarkMetrics) => m.accuracy))}%
+                    {(() => {
+                      const values = Object.values(dynamicResults);
+                      return values.length > 0 ? `${Math.max(...values.map(m => m.accuracy)).toFixed(2)}%` : '0.00%';
+                    })()}
                   </div>
                 </div>
                 <div className="bg-[#1F2937]/30 rounded-xl p-5 border border-[#374151]/50">
                   <div className="flex items-center gap-3 mb-3">
                     <DollarSign className="text-green-400" size={18} />
-                    <span className="text-sm text-gray-400 font-medium">Avg. Efficiency</span>
+                    <span className="text-sm text-gray-400 font-medium">Best TEI (Impact)</span>
                   </div>
                   <div className="text-3xl font-mono text-white">
-                    ${(Object.values(runResults).reduce((acc: number, m: BenchmarkMetrics) => acc + m.total_cost, 0) / Object.keys(runResults).length).toFixed(4)}
+                    {(() => {
+                      const teis = Object.values(dynamicResults).map(m => m.tei).filter(t => t !== undefined && !isNaN(t));
+                      return teis.length > 0 ? `$${Math.min(...teis).toLocaleString()}` : 'N/A';
+                    })()}
                   </div>
                 </div>
                 <div className="bg-[#1F2937]/30 rounded-xl p-5 border border-[#374151]/50">
                   <div className="flex items-center gap-3 mb-3">
-                    <Activity className="text-blue-400" size={18} />
-                    <span className="text-sm text-gray-400 font-medium">Global Latency</span>
+                    <Activity className="text-[#6B4EFF]" size={18} />
+                    <span className="text-sm text-gray-400 font-medium">Top Efficiency (IES)</span>
                   </div>
                   <div className="text-3xl font-mono text-white">
-                    {(Object.values(runResults).reduce((acc: number, m: BenchmarkMetrics) => acc + m.avg_latency, 0) / Object.keys(runResults).length).toFixed(0)}<span className="text-sm text-gray-500 ml-1">ms</span>
+                    {(() => {
+                      const ies = Object.values(dynamicResults).map(m => m.ies).filter(i => i !== undefined && !isNaN(i));
+                      return ies.length > 0 ? Math.max(...ies).toFixed(2) : 'N/A';
+                    })()}
                   </div>
                 </div>
               </div>
@@ -969,18 +1046,16 @@ export default function InferomicsPage() {
                     <tr className="border-b border-[#1F2937] text-gray-500 text-[10px] uppercase tracking-[0.2em] font-bold">
                       <th className="pb-4 pl-4">Model Candidate</th>
                       <th className="pb-4">Accuracy</th>
-                      <th className="pb-4">Latency (avg)</th>
-                      <th className="pb-4">Cost (per 1M)</th>
-                      <th className="pb-4">Est. Project Cost</th>
+                      <th className="pb-4">Reliability</th>
+                      <th className="pb-4">Latency</th>
+                      <th className="pb-4">TEI</th>
+                      <th className="pb-4">IES Score</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#1F2937]">
-                    {Object.entries(runResults).map(([modelId, metrics]: [string, BenchmarkMetrics]) => {
+                    {Object.entries(dynamicResults).map(([modelId, metrics]: [string, BenchmarkMetrics]) => {
                       const modelData = availableModels.find(m => m.id === modelId);
-                      const accuracyColor = metrics.accuracy > 90 ? 'text-green-400' : metrics.accuracy > 70 ? 'text-[#E0FF4F]' : 'text-orange-400';
-
-                      // Calculate projected cost based on user's economic levers
-                      const estMonthlyCost = (metrics.total_cost / metrics.processed_count) * projectedVolume;
+                      const isHighAccuracy = metrics.accuracy > 70;
 
                       return (
                         <tr key={modelId} className="group hover:bg-[#1F2937]/20 transition-colors">
@@ -992,18 +1067,19 @@ export default function InferomicsPage() {
                           </td>
                           <td className="py-5">
                             <div className="flex items-center gap-3">
-                              <div className="w-16 h-1.5 bg-[#1F2937] rounded-full overflow-hidden">
-                                <div
-                                  className={cn("h-full rounded-full transition-all duration-1000", metrics.accuracy > 70 ? "bg-[#E0FF4F]" : "bg-orange-500")}
-                                  style={{ width: `${metrics.accuracy}%` }}
-                                />
-                              </div>
-                              <span className={cn("font-mono font-bold", accuracyColor)}>{metrics.accuracy}%</span>
+                              <span className={cn("text-lg font-mono font-bold", isHighAccuracy ? "text-[#E0FF4F]" : "text-orange-500")}>
+                                {metrics.accuracy.toFixed(2)}%
+                              </span>
                             </div>
                           </td>
                           <td className="py-5">
+                            <span className="text-sm text-gray-400 font-mono">
+                              {metrics.reliability !== undefined ? `${metrics.reliability.toFixed(2)}%` : 'N/A'}
+                            </span>
+                          </td>
+                          <td className="py-5">
                             <div className="flex items-center gap-2">
-                              <span className="text-white font-mono">{Math.round(metrics.avg_latency)}ms</span>
+                              <span className="text-sm text-white font-mono">{metrics.avg_latency}ms</span>
                               {metrics.avg_latency < latencyTolerance ? (
                                 <Zap size={12} className="text-[#E0FF4F] fill-[#E0FF4F]" />
                               ) : (
@@ -1012,12 +1088,21 @@ export default function InferomicsPage() {
                             </div>
                           </td>
                           <td className="py-5">
-                            <span className="text-gray-400 font-mono text-sm">${(metrics.total_cost / (metrics.processed_count || 1) * 1000000).toFixed(2)}</span>
+                            <div className="flex flex-col">
+                              <span className="text-white font-mono font-bold">
+                                {metrics.tei !== undefined ? `$${metrics.tei.toLocaleString()}` : 'N/A'}
+                              </span>
+                              <span className="text-[8px] text-gray-500 uppercase tracking-widest">Economic Impact</span>
+                            </div>
                           </td>
                           <td className="py-5">
-                            <div className="flex flex-col">
-                              <span className="text-white font-mono font-bold">${estMonthlyCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                              <span className="text-[8px] text-gray-500 uppercase tracking-widest">Monthly projected</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-lg font-bold text-[#6B4EFF] font-mono">
+                                {metrics.ies ?? 'N/A'}
+                              </span>
+                              {metrics.ies !== undefined && metrics.ies === Math.max(...Object.values(dynamicResults).map(m => m.ies || 0)) && (
+                                <span className="text-[8px] bg-[#6B4EFF]/20 text-[#6B4EFF] px-1.5 py-0.5 rounded border border-[#6B4EFF]/30 font-bold uppercase">Best</span>
+                              )}
                             </div>
                           </td>
                         </tr>

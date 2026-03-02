@@ -9,6 +9,36 @@ const NEBIUS_BASE_URL = 'https://api.tokenfactory.nebius.com/v1/';
 
 // Hardcoded mappings removed - now using dynamic data from /api/models
 
+interface StandardizedModel {
+    id: string;
+    name: string;
+    provider: string;
+    description: string;
+    priceIn: number;
+    priceOut: number;
+    context_window: number;
+    isFast: boolean;
+    type: string;
+}
+
+interface EngineMetrics {
+    accuracy: number;
+    reliability: number;
+    avg_latency: number;
+    total_cost: number;
+    tei: number;
+    cost_per_1m: number;
+    processed_count: number;
+    ies?: number;
+}
+
+interface LoggedSample {
+    raw: string;
+    extracted: string;
+    ground: string;
+    match: 'Y' | 'N';
+}
+
 /**
  * Baseline Discovery Engine Route
  * POST /api/inferomics/run
@@ -62,8 +92,8 @@ export async function POST(request: NextRequest) {
         // 1.5 Fetch Dynamic Pricing for selected models
         // We call our own internal API or just fetch from Nebius directly here
         const modelsRes = await fetch(`${request.nextUrl.origin}/api/models`);
-        const modelsData = await modelsRes.json();
-        const availableModels: { id: string, name: string, priceIn?: number, priceOut?: number }[] = modelsData.models || [];
+        const { models: fetchedModels } = await modelsRes.json() as { models: StandardizedModel[] };
+        const availableModels = fetchedModels;
 
         // 2. Initialize OpenAI (Nebius compliant)
         const client = new OpenAI({
@@ -73,18 +103,27 @@ export async function POST(request: NextRequest) {
 
         // 3. Execution Loop
         const BATCH_SIZE = 10;
-        const runMetrics: Record<string, Record<string, unknown>> = {};
+        const runMetrics: Record<string, EngineMetrics> = {};
 
-        // Process each model
+        // Fetch economic levers from objective for TEI calculation
+        const objData = objDoc.data() || {};
+        const projectedVolume = objData.economic_levers?.volume || 10000;
+        const errorRiskCost = objData.economic_levers?.error_cost || 25.0;
+
+        // Process each model and collect raw metrics first for normalization
+        const modelResults: Record<string, EngineMetrics> = {};
+
         for (const modelId of selectedModels) {
             const modelInfo = availableModels.find(m => m.id === modelId);
-            const nebiusSlug = modelInfo?.id || modelId; // Fallback to ID if not found, but should be found
+            const nebiusSlug = modelInfo?.id || modelId;
 
             let modelTotalLatency = 0;
             let modelTotalPromptTokens = 0;
             let modelTotalCompletionTokens = 0;
             let modelSuccessCount = 0;
+            let modelReliabilityCount = 0;
             let processedCount = 0;
+            const samplesLogged: LoggedSample[] = [];
 
             // Process samples in batches
             for (let i = 0; i < samples.length; i += BATCH_SIZE) {
@@ -96,10 +135,10 @@ export async function POST(request: NextRequest) {
                         const completion = await client.chat.completions.create({
                             model: nebiusSlug,
                             messages: [
-                                { role: 'system', content: objDoc.data()?.master_prompt || 'You are a helpful assistant.' },
+                                { role: 'system', content: objData.master_prompt || 'You are a helpful assistant.' },
                                 { role: 'user', content: item.prompt }
                             ],
-                            temperature: 0.1, // Lower temperature for more deterministic benchmark results
+                            temperature: 0.1,
                             max_tokens: 512,
                         });
 
@@ -107,30 +146,37 @@ export async function POST(request: NextRequest) {
                         const output = completion.choices[0]?.message?.content || '';
                         const groundTruth = item.completion || '';
 
-                        // Basic accuracy check: does the output contain the bracketed label?
-                        const isCorrect = output.toLowerCase().includes(`[[${groundTruth.toLowerCase()}]]`);
+                        // Reliability (The Format): Valid [[ ]] wrapping
+                        const hasBrackets = output.includes('[[') && output.includes(']]');
+                        if (hasBrackets) modelReliabilityCount++;
 
-                        // Prepare response document
-                        const responseDoc = {
-                            model_id: modelId,
-                            nebius_slug: nebiusSlug,
-                            input_text: item.prompt,
-                            raw_output: output,
-                            ground_truth: groundTruth,
-                            latency_ms: latencyMs,
-                            usage: completion.usage,
-                            is_correct: isCorrect,
-                            timestamp: new Date(),
-                        };
+                        // Accuracy (The Signal): Normalized exact match
+                        // Extract label inside brackets if present
+                        let extractedLabel = output;
+                        const bracketMatch = output.match(/\[\[(.*?)\]\]/);
+                        if (bracketMatch) {
+                            extractedLabel = bracketMatch[1].trim();
+                        }
+                        const isCorrect = extractedLabel.toLowerCase() === groundTruth.toLowerCase();
+                        if (isCorrect) modelSuccessCount++;
+
+                        // Sample logging (Requirement: 3 records)
+                        if (samplesLogged.length < 3) {
+                            samplesLogged.push({
+                                raw: output.substring(0, 100) + (output.length > 100 ? '...' : ''),
+                                extracted: extractedLabel,
+                                ground: groundTruth,
+                                match: isCorrect ? 'Y' : 'N'
+                            });
+                        }
 
                         // Aggregates
                         modelTotalLatency += latencyMs;
                         modelTotalPromptTokens += completion.usage?.prompt_tokens || 0;
                         modelTotalCompletionTokens += completion.usage?.completion_tokens || 0;
-                        if (isCorrect) modelSuccessCount++;
                         processedCount++;
 
-                        // Persist to Firestore: objectives/{id}/models/{model_id}/results/{responseId}
+                        // Persist to Firestore
                         const responseId = `resp_${Date.now()}_${Math.random().toString(36).substring(7)}`;
                         const safeModelId = modelId.replace(/\//g, '_');
 
@@ -142,8 +188,18 @@ export async function POST(request: NextRequest) {
                             .collection('results')
                             .doc(responseId)
                             .set({
-                                ...responseDoc,
-                                run_id: runId // Keep reference for batch grouping
+                                model_id: modelId,
+                                nebius_slug: nebiusSlug,
+                                input_text: item.prompt,
+                                raw_output: output,
+                                ground_truth: groundTruth,
+                                extracted_label: extractedLabel,
+                                latency_ms: latencyMs,
+                                usage: completion.usage,
+                                is_correct: isCorrect,
+                                is_reliable: hasBrackets,
+                                run_id: runId,
+                                timestamp: new Date(),
                             });
 
                         return { success: true };
@@ -156,24 +212,56 @@ export async function POST(request: NextRequest) {
                 await Promise.all(batchPromises);
             }
 
-            // Calculate Model-level aggregates using dynamic pricing
-            const priceIn = (modelInfo?.priceIn || 0); // Already in $ per 1M
-            const priceOut = (modelInfo?.priceOut || 0);
-            const cost = ((modelTotalPromptTokens / 1000000) * priceIn) + ((modelTotalCompletionTokens / 1000000) * priceOut);
-            const safeModelId = modelId.replace(/\//g, '_');
+            // Print requirement logs to console
+            console.log(`--- Sample Records for [${modelId}] ---`);
+            samplesLogged.forEach((s, idx) => {
+                console.log(`${idx + 1}. [Raw Output]: ${s.raw} -> [Extracted]: ${s.extracted} -> [Ground Truth]: ${s.ground} -> [Is Match: ${s.match}]`);
+            });
 
-            const modelMetrics = {
-                avg_latency: processedCount > 0 ? modelTotalLatency / processedCount : 0,
-                total_prompt_tokens: modelTotalPromptTokens,
-                total_completion_tokens: modelTotalCompletionTokens,
-                accuracy: processedCount > 0 ? Math.round(modelSuccessCount / processedCount * 10000) / 100 : 0,
-                total_cost: cost,
+            const priceIn = (modelInfo?.priceIn || 0);
+            const priceOut = (modelInfo?.priceOut || 0);
+            const totalTokenCost = ((modelTotalPromptTokens / 1000000) * priceIn) + ((modelTotalCompletionTokens / 1000000) * priceOut);
+
+            const accuracy = processedCount > 0 ? (modelSuccessCount / processedCount) : 0;
+            const reliability = processedCount > 0 ? (modelReliabilityCount / processedCount) : 0;
+            const avgLatency = processedCount > 0 ? (modelTotalLatency / processedCount) : 0;
+
+            // Total Economic Impact (TEI)
+            // formula: (Total Token Cost) + ((1 - Accuracy) * Projected_Volume * Error_Risk_Cost)
+            const tei = totalTokenCost + ((1 - accuracy) * projectedVolume * errorRiskCost);
+
+            modelResults[modelId] = {
+                accuracy: Math.round(accuracy * 10000) / 100, // as percentage
+                reliability: Math.round(reliability * 10000) / 100, // as percentage
+                avg_latency: Math.round(avgLatency),
+                total_cost: totalTokenCost,
+                tei: Math.round(tei * 100) / 100,
+                cost_per_1m: Math.round(((totalTokenCost / (processedCount || 1)) * 1000000) * 100) / 100,
                 processed_count: processedCount
             };
+        }
 
-            runMetrics[modelId] = modelMetrics;
+        // 3.5 IES Normalization and Calculation
+        const architectures = Object.values(modelResults);
+        const maxLatency = Math.max(...architectures.map(m => m.avg_latency)) || 1;
+        const maxCostPer1M = Math.max(...architectures.map(m => m.cost_per_1m)) || 0.01;
 
-            // Write pre-calculated metrics to the model document for instant lookup
+        for (const modelId in modelResults) {
+            const m = modelResults[modelId];
+            const nl = m.avg_latency / maxLatency;
+            const nc = m.cost_per_1m / maxCostPer1M;
+
+            // IES = ((Accuracy * 0.7) + (Reliability * 0.3)) / (Normalized_Latency + Normalized_Cost)
+            // Note: nl + nc has range (usually) 0 to 2. We add small epsilon (0.001) to avoid div by zero.
+            const numerator = ((m.accuracy / 100) * 0.7) + ((m.reliability / 100) * 0.3);
+            const denominator = nl + nc + 0.001;
+            const ies = numerator / denominator;
+
+            m.ies = Math.round(ies * 100) / 100;
+            runMetrics[modelId] = m;
+
+            // Persist to model document
+            const safeModelId = modelId.replace(/\//g, '_');
             await firestore
                 .collection('objectives')
                 .doc(objectiveId)
@@ -181,8 +269,7 @@ export async function POST(request: NextRequest) {
                 .doc(safeModelId)
                 .set({
                     id: modelId,
-                    nebius_slug: modelInfo?.id || modelId,
-                    cumulative_metrics: modelMetrics,
+                    cumulative_metrics: m,
                     last_run_id: runId,
                     last_run_at: new Date(),
                     updated_at: new Date(),
