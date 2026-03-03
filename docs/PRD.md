@@ -1,9 +1,9 @@
 # Inferomics — Product Requirements Document
 
-**Document Status:** Draft v1.0
-**Author:** Technical Product Management
-**Audience:** Engineering, Platform Architecture
-**Last Updated:** Feb 28 2026
+**Document Status:** Draft v1.0 \
+**Author:** Tim Trainor \
+**Audience:** Engineering, Platform Architecture \
+**Last Updated:** Feb 28 2026 
 
 ---
 
