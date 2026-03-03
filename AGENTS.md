@@ -47,13 +47,17 @@ src/
       objective/          ← GET/POST: Firestore-backed session persistence
     Inferomics/           ← Main active page (do not rename)
       page.tsx            ← Full decision-engine UI (single client component)
+    inference/
+      playground/         ← Standalone playground route
+        page.tsx          ← Renders PlaygroundModal
     data-lab/
       datasets/           ← Data Lab upload page for JSONL datasets
     layout.tsx            ← Root layout — TopNav + Sidebar (do not restructure)
     page.tsx              ← Redirects / → /Inferomics
     globals.css           ← Design tokens and component classes (source of truth)
   components/
-    UploadModal.tsx        ← JSONL file upload modal
+    UploadModal.tsx       ← JSONL file upload modal
+    PlaygroundModal.tsx   ← Reusable tuning interface for prompt/parameter selection
     layout/               ← TopNav.tsx, Sidebar.tsx (structure is fixed)
   context/
     AppContext.tsx         ← Global state + Firestore auto-save (source of truth)
@@ -178,6 +182,10 @@ All routes in `src/app/api/[resource]/route.ts`. Export named functions: `GET`, 
 | GET    | /api/datasets            | List all uploaded dataset metadata           |
 | POST   | /api/datasets/upload     | Upload a JSONL file to Cloud Storage         |
 | POST   | /api/inferomics/sample   | Generate Cochran sample from a dataset       |
+| POST   | /api/inferomics/run      | Trigger async Nebius inference pipeline      |
+| GET    | /api/model/[id]/capabilities | Get dynamic Nebius parameter tolerances  |
+| GET    | /api/preset              | Load saved playground configs from Firestore |
+| POST   | /api/preset              | Save playground config to Firestore          |
 | GET    | /api/inferomics/config   | Get saved config (legacy — use /api/objective) |
 | POST   | /api/inferomics/config   | Save config (legacy — use /api/objective)    |
 | GET    | /api/objective           | Get Firestore-persisted session config       |
@@ -193,6 +201,7 @@ See `docs/DATA_MODEL.md` for full schema. Core Firestore collections:
 |---|---|---|
 | `objectives` | `profile_id`, `master_prompt`, `selected_models`, `economic_levers`, `selected_dataset_id`, `accuracy`, `sampled_data` | Session config persistence (doc ID: `'default'`) |
 | `datasets` | `name`, `url`, `recordCount`, `createdAt` | Uploaded JSONL dataset metadata |
+| `presets` | `model_id`, `preset_name`, `master_prompt`, `parameters`, `few_shot_examples` | Individual saved Playground model configurations |
 
 **Legacy collections (from v0.1):** `models`, `weightPresets`, `inferenceLogs` — no longer used by the main UI.
 
@@ -207,13 +216,15 @@ See `docs/DATA_MODEL.md` for full schema. Core Firestore collections:
 - Master System Prompt with live token count
 - Dataset upload (JSONL) and Cochran sample size calculation
 - Firestore-backed session persistence (auto-save via AppContext)
+- Playground Tuning (Modals + Standalone UI) for prompt styling and overrides
+- Execution of Nebius inference via standard REST API
 - Demo reset mode (blank UI for presentation without wiping Firestore)
 - Dockerfile + Cloud Run deployment
 
 **Out of scope (do not add):**
 
 - User authentication or login
-- Charts or data visualizations (scoring output heatmap etc.)
+- Charts or data visualizations (scoring output heatmap etc. outside of existing results table)
 - CI/CD pipeline or multiple environments
 - Any feature not directly related to the FinOps decision engine
 

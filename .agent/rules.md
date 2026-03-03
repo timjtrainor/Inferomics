@@ -45,7 +45,7 @@ As the Antigravity agent, you are empowered to act autonomously to help the user
 
 ## API Route Conventions
 
-- All backend routes live in `src/app/api/[resource]/route.ts`.
+- All backend routes live in `src/app/api/[resource]/route.ts`. Includes `/api/preset` and `/api/objective` for saving configurations, `/api/inferomics/run` for asynchronous inference triggers, and `/api/model/[id]/capabilities` for dynamic parameters.
 - Export named functions: `GET`, `POST`, `PUT`, `DELETE`.
 - Use `getFirestore()` from `src/lib/firebase-admin.ts` in every API route that touches Firestore. Never instantiate `Firestore` directly — the singleton pattern prevents HMR connection leaks.
 
@@ -59,6 +59,8 @@ As the Antigravity agent, you are empowered to act autonomously to help the user
   - Fields: `profile_id`, `master_prompt`, `selected_models[]`, `selected_dataset_id`, `accuracy`, `sampled_data`, `economic_levers.{volume, latency, error_cost}`, `updated_at`
 - `datasets` — uploaded JSONL dataset metadata
   - Fields: `name`, `url`, `recordCount`, `createdAt`
+- `presets` — saved model-specific parameters and system prompts from the playground
+  - Fields: `model_id`, `preset_name`, `master_prompt`, `parameters`, `few_shot_examples`
 
 **Deprecated collections (do not use):** `models`, `weightPresets`, `inferenceLogs`
 
@@ -83,6 +85,8 @@ As the Antigravity agent, you are empowered to act autonomously to help the user
 - Master System Prompt with live gpt-tokenizer token count
 - Dataset upload (JSONL) + Cochran sample size
 - Firestore-backed auto-save session persistence
+- Playground parameter tuning and system prompt overrides on a per-model basis
+- Execution of Nebius inference and displaying baseline engine metrics
 - Demo reset mode
 - Dockerfile + Cloud Run deployment
 
@@ -91,5 +95,4 @@ As the Antigravity agent, you are empowered to act autonomously to help the user
 - User authentication or login
 - Charts or data visualizations
 - CI/CD pipelines
-- Inference API calls to Nebius (future phase, not yet in scope)
 - Any feature not directly related to the FinOps decision engine
