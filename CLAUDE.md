@@ -36,12 +36,16 @@ src/
       objective/          ← GET/POST Firestore-backed session persistence
     Inferomics/           ← Main active page (do not rename)
       page.tsx            ← Full decision-engine UI (single "use client" component)
+    inference/
+      playground/         ← Standalone playground route
+        page.tsx          ← Renders PlaygroundModal
     data-lab/datasets/    ← Data Lab upload UI
     layout.tsx            ← Root layout — TopNav + Sidebar (do not restructure)
     page.tsx              ← Redirects / → /Inferomics
     globals.css           ← Design tokens and component classes (source of truth)
   components/
-    UploadModal.tsx        ← JSONL file upload modal component
+    UploadModal.tsx       ← JSONL file upload modal component
+    PlaygroundModal.tsx   ← Tuning modal for individual parameter experimentation
     layout/               ← TopNav.tsx, Sidebar.tsx (fixed structure)
   context/
     AppContext.tsx         ← Global state + Firestore auto-save (single source of truth)
@@ -149,6 +153,10 @@ All routes in `src/app/api/[resource]/route.ts`. Export named functions: `GET`, 
 | GET    | /api/datasets            | List uploaded dataset metadata            |
 | POST   | /api/datasets/upload     | Upload JSONL to Cloud Storage             |
 | POST   | /api/inferomics/sample   | Generate Cochran sample from dataset      |
+| POST   | /api/inferomics/run      | Trigger asynchronous Nebius inference     |
+| GET    | /api/model/[id]/capabilities | Get dynamic Nebius parameter tolerances |
+| GET    | /api/preset              | Load saved playground configs from Firestore |
+| POST   | /api/preset              | Save playground config to Firestore       |
 | GET    | /api/objective           | Fetch Firestore-persisted session config  |
 | POST   | /api/objective           | Save/merge session config to Firestore    |
 
@@ -164,6 +172,7 @@ See `docs/DATA_MODEL.md` for full schema.
 |---|---|
 | `objectives` | Session config persistence (doc ID: `'default'`) |
 | `datasets` | Uploaded JSONL dataset metadata |
+| `presets` | Individual saved Playground model configurations |
 
 **`objectives` document fields:** `profile_id`, `master_prompt`, `selected_models[]`, `selected_dataset_id`, `accuracy`, `sampled_data`, `economic_levers.{volume, latency, error_cost}`, `updated_at`
 
@@ -181,15 +190,16 @@ See `docs/DATA_MODEL.md` for full schema.
 - Master System Prompt with live token count (gpt-tokenizer)
 - Dataset upload (JSONL) + Cochran sample size calculation
 - Firestore-backed session persistence with auto-save
+- Model parameter tuning and prompt overriding via Playground UI
+- Asynchronous inference runs against Nebius Token Factory
 - Demo reset mode
 - Dockerfile + Cloud Run deployment
 
 **Out of scope (do not add):**
 
 - User authentication or login
-- Charts or data visualizations
+- Charts or data visualizations (outside basic tables)
 - CI/CD pipeline or multiple environments
-- Inference API calls to Nebius (future phase)
 
 ---
 

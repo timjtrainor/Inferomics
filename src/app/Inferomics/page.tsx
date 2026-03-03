@@ -1,12 +1,13 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { encode } from 'gpt-tokenizer';
 import { Settings, BarChart3, Zap, Database, ChevronDown, CheckCircle2, Search, TrendingUp, DollarSign, Activity, Cloud, Play, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppContext } from '@/context/AppContext';
 import { calculateCochran } from '@/lib/statistics';
+import PlaygroundModal from '@/components/PlaygroundModal';
 
 interface Dataset {
   id: string;
@@ -221,6 +222,7 @@ function InferomicsContent() {
   } = useAppContext();
 
   const searchParams = useSearchParams();
+  const router = useRouter();
   const urlRunId = searchParams.get('runId');
 
   // Handle URL-based direct access to a run
@@ -266,6 +268,7 @@ function InferomicsContent() {
       const result = await runRes.json();
       if (result.success) {
         setRunStatus('COMPLETE');
+        router.push(`/Inferomics?runId=${runId}`);
       } else {
         setRunStatus('ERROR');
       }
@@ -279,6 +282,7 @@ function InferomicsContent() {
   const [tokenCount, setTokenCount] = useState(0);
   const [modelSearch, setModelSearch] = useState('');
   const [runResults, setRunResults] = useState<Record<string, BenchmarkMetrics> | null>(null);
+  const [activeTuneModelId, setActiveTuneModelId] = useState<string | null>(null);
 
   // Sync from context on load
   useEffect(() => {
@@ -1096,13 +1100,21 @@ function InferomicsContent() {
                             </div>
                           </td>
                           <td className="py-5">
-                            <div className="flex items-center gap-2">
-                              <span className="text-lg font-bold text-[#6B4EFF] font-mono">
-                                {metrics.ies ?? 'N/A'}
-                              </span>
-                              {metrics.ies !== undefined && metrics.ies === Math.max(...Object.values(dynamicResults).map(m => m.ies || 0)) && (
-                                <span className="text-[8px] bg-[#6B4EFF]/20 text-[#6B4EFF] px-1.5 py-0.5 rounded border border-[#6B4EFF]/30 font-bold uppercase">Best</span>
-                              )}
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="text-lg font-bold text-[#6B4EFF] font-mono">
+                                  {metrics.ies ?? 'N/A'}
+                                </span>
+                                {metrics.ies !== undefined && metrics.ies === Math.max(...Object.values(dynamicResults).map(m => m.ies || 0)) && (
+                                  <span className="text-[8px] bg-[#6B4EFF]/20 text-[#6B4EFF] px-1.5 py-0.5 rounded border border-[#6B4EFF]/30 font-bold uppercase">Best</span>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => setActiveTuneModelId(modelId)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-[#1F2937] hover:bg-[#374151] border border-[#374151] hover:border-[#BFAF6B] text-xs font-semibold text-gray-300 hover:text-white transition-all shadow-sm group"
+                              >
+                                <Settings size={12} className="text-[#6B4EFF] group-hover:rotate-90 transition-transform duration-300" /> Tune
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -1123,6 +1135,15 @@ function InferomicsContent() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Playground Modal */}
+      {activeTuneModelId && (
+        <PlaygroundModal
+          initialModelId={activeTuneModelId}
+          isModal={true}
+          onClose={() => setActiveTuneModelId(null)}
+        />
       )}
 
     </div >
