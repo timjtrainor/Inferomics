@@ -283,6 +283,14 @@ function InferomicsContent() {
   const [modelSearch, setModelSearch] = useState('');
   const [runResults, setRunResults] = useState<Record<string, BenchmarkMetrics> | null>(null);
   const [activeTuneModelId, setActiveTuneModelId] = useState<string | null>(null);
+  const [isConfigExpanded, setIsConfigExpanded] = useState(true);
+
+  // Auto-collapse configuration when run completes
+  useEffect(() => {
+    if (runStatus === 'COMPLETE') {
+      setIsConfigExpanded(false);
+    }
+  }, [runStatus]);
 
   // Sync from context on load
   useEffect(() => {
@@ -642,339 +650,358 @@ function InferomicsContent() {
         </div>
       </div> */}
 
-      {/* Configuration Step */}
-      <div className="space-y-4">
-        <h2 className="text-xl font-semibold text-white flex items-center gap-2">
-          <Settings className="text-[#6B4EFF]" size={24} />
-          Configuration Logic
-        </h2>
+      {/* Configuration & Data Accordion */}
+      <div className="mt-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-white flex items-center gap-2">
+            <Settings className="text-[#6B4EFF]" size={24} />
+            Configuration Logic
+            {runStatus === 'COMPLETE' && <span className="text-[10px] bg-gray-800 text-gray-400 px-2 py-0.5 rounded font-mono uppercase ml-2 tracking-widest border border-gray-700">Locked Reference</span>}
+          </h2>
+          {runStatus === 'COMPLETE' && (
+            <button
+              onClick={() => setIsConfigExpanded(!isConfigExpanded)}
+              className="flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-md bg-[#1F2937] hover:bg-[#374151] border border-[#374151] hover:border-gray-500 text-gray-300 transition-all shadow-sm"
+            >
+              {isConfigExpanded ? 'Collapse' : 'Expand'}
+              <ChevronDown className={cn("transition-transform text-gray-400", isConfigExpanded ? "rotate-180" : "")} size={14} />
+            </button>
+          )}
+        </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Master Prompt */}
-          <div className="bg-[#0D1117] border border-[#1F2937] rounded-xl p-6 flex flex-col h-[480px]">
-            <h3 className="text-lg font-semibold text-white mb-2 flex items-center justify-between">
-              Master System Prompt
-              <span className={cn(
-                "text-xs px-2 py-1 rounded font-mono",
-                localPrompt.trim().length > 0 ? "bg-[#6B4EFF]/20 text-[#6B4EFF]" : "bg-[#1F2937] text-gray-400"
-              )}>
-                ~{tokenCount} Tokens
-              </span>
-            </h3>
-            <p className="text-sm text-gray-400 mb-4">
-              Enter the system instructions that will be applied across all candidate models. State saves automatically.
-            </p>
-            <textarea
-              className={cn(
-                "w-full bg-[#1F2937] border border-[#374151] rounded-lg p-4 text-white placeholder-gray-500 focus:outline-none focus:border-[#6B4EFF] resize-y min-h-[160px] flex-grow transition-colors",
-                isSessionLocked && "opacity-50 cursor-not-allowed"
-              )}
-              placeholder="Enter the system instructions that will be applied across all candidate models..."
-              onFocus={() => {
-                if (isResetForDemo) {
-                  restoreField('masterPrompt');
-                }
-              }}
-              value={localPrompt}
-              onChange={(e) => setLocalPrompt(e.target.value)}
-              disabled={isSessionLocked}
-            />
-          </div>
-
-          {/* Model Selection Basket */}
-          <div className="bg-[#0D1117] border border-[#1F2937] rounded-xl p-6 flex flex-col h-[480px]">
-            <h3 className="text-lg font-semibold text-white mb-2 flex items-center justify-between">
-              Model Candidate Pool
-              <span className={cn(
-                "text-xs px-2 py-1 rounded font-semibold",
-                selectedModels.length >= 2 && selectedModels.length <= 5
-                  ? "bg-[#E0FF4F]/20 text-[#E0FF4F]"
-                  : "bg-orange-500/20 text-orange-400"
-              )}>
-                {selectedModels.length} / 5 Selected (Min 2)
-              </span>
-            </h3>
-            <p className="text-sm text-gray-400 mb-4">
-              Select between 2 to 5 foundational models to test your objective logic.
-            </p>
-
-            <div className="relative mb-4">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-              <input
-                type="text"
-                placeholder="Search models or providers..."
-                className="w-full bg-[#1F2937] border border-[#374151] pl-10 pr-4 py-2 rounded-lg text-sm text-white focus:outline-none focus:border-[#6B4EFF]"
+        <div className={cn(
+          "transition-all duration-500 overflow-hidden",
+          !isConfigExpanded ? "max-h-0 opacity-0 space-y-0" : "max-h-[5000px] opacity-100 space-y-8"
+        )}>
+          {/* Configuration Step Content */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Master Prompt */}
+            <div className="bg-[#0D1117] border border-[#1F2937] rounded-xl p-6 flex flex-col h-[480px]">
+              <h3 className="text-lg font-semibold text-white mb-2 flex items-center justify-between">
+                Master System Prompt
+                <span className={cn(
+                  "text-xs px-2 py-1 rounded font-mono",
+                  localPrompt.trim().length > 0 ? "bg-[#6B4EFF]/20 text-[#6B4EFF]" : "bg-[#1F2937] text-gray-400"
+                )}>
+                  ~{tokenCount} Tokens
+                </span>
+              </h3>
+              <p className="text-sm text-gray-400 mb-4">
+                Enter the system instructions that will be applied across all candidate models. State saves automatically.
+              </p>
+              <textarea
+                className={cn(
+                  "w-full bg-[#1F2937] border border-[#374151] rounded-lg p-4 text-white placeholder-gray-500 focus:outline-none focus:border-[#6B4EFF] resize-y min-h-[160px] flex-grow transition-colors",
+                  isSessionLocked && "opacity-50 cursor-not-allowed"
+                )}
+                placeholder="Enter the system instructions that will be applied across all candidate models..."
                 onFocus={() => {
                   if (isResetForDemo) {
-                    restoreField('selectedModels');
+                    restoreField('masterPrompt');
                   }
                 }}
-                value={modelSearch}
-                onChange={(e) => setModelSearch(e.target.value)}
+                value={localPrompt}
+                onChange={(e) => setLocalPrompt(e.target.value)}
                 disabled={isSessionLocked}
               />
             </div>
 
-            <div className="flex-grow overflow-y-auto space-y-2 pr-2 custom-scrollbar border-t border-[#1F2937] pt-2 max-h-[400px]">
-              {isModelsLoading ? (
-                // Loading Skeleton
-                Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="w-full h-20 bg-[#1F2937] border border-[#374151] rounded-lg animate-pulse" />
-                ))
-              ) : (
-                filteredModels.map(model => {
-                  const isSelected = selectedModels.includes(model.id);
-                  const isDisabled = isSessionLocked || (!isSelected && selectedModels.length >= 5);
-
-                  return (
-                    <button
-                      key={model.id}
-                      onClick={() => toggleModel(model.id)}
-                      disabled={isDisabled}
-                      className={cn(
-                        "w-full flex items-center justify-between p-3 rounded-lg border text-left transition-all relative overflow-hidden",
-                        isSelected
-                          ? "bg-[#6B4EFF]/10 border-[#6B4EFF] shadow-sm shadow-[#6B4EFF]/10"
-                          : "bg-[#1F2937] border-[#374151] hover:border-gray-600",
-                        isDisabled && !isSelected && "opacity-50 cursor-not-allowed"
-                      )}
-                    >
-                      <div className="flex-grow">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-white">{model.name}</span>
-                          {model.isFast ? (
-                            <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-[#6B4EFF]/20 text-[#6B4EFF] border border-[#6B4EFF]/30">Fast</span>
-                          ) : (
-                            <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-gray-500/10 text-gray-400 border border-gray-500/20">Base</span>
-                          )}
-                        </div>
-                        <div className="text-[11px] text-gray-500 mt-0.5 font-medium">
-                          {model.provider} &middot; {model.type}
-                        </div>
-                        <div className="flex gap-3 mt-2 font-mono text-[10px]">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-gray-500">In:</span>
-                            <span className="text-[#E0FF4F]">${(model.priceIn || 0).toFixed(2)}/1M</span>
-                          </div>
-                          {model.priceOut !== undefined && model.priceOut > 0 && (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-gray-500">Out:</span>
-                              <span className="text-[#6B4EFF]">${(model.priceOut || 0).toFixed(2)}/1M</span>
-                            </div>
-                          )}
-                          {model.context_window !== undefined && model.context_window > 0 && (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-gray-500">Ctx:</span>
-                              <span className="text-gray-300">{Math.round((model.context_window || 0) / 1024)}k</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      {isSelected && <CheckCircle2 className="text-[#E0FF4F]" size={18} />}
-                    </button>
-                  );
-                })
-              )}
-              {!isModelsLoading && filteredModels.length === 0 && (
-                <div className="text-center text-sm text-gray-500 py-4">No models found matching &quot;{modelSearch}&quot;</div>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content Area: Data Selection */}
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-2 gap-8">
-
-        {/* Source Selection Panel */}
-        <div className={cn(
-          "bg-[#0D1117] border border-[#1F2937] rounded-xl p-6 transition-opacity relative",
-          isDataSelectionLocked && "opacity-60 pointer-events-none cursor-not-allowed"
-        )}>
-          {/* Overlay for Draft Config Status */}
-          {configStatus === 'DRAFT' && !isSessionLocked && (
-            <div className="absolute inset-0 z-10 bg-[#0D1117]/60 backdrop-blur-[2px] rounded-xl flex items-center justify-center pointer-events-auto">
-              <div className="bg-[#1F2937] border border-[#374151] px-6 py-4 rounded-lg text-center shadow-xl max-w-[280px]">
-                <Settings className="text-[#6B4EFF] mx-auto mb-2" size={24} />
-                <p className="text-white font-medium text-sm">Configuration Incomplete</p>
-                <p className="text-xs text-gray-400 mt-1">Provide a Master System Prompt and select 2-5 model candidates to unlock.</p>
-              </div>
-            </div>
-          )}
-
-          <h2 className="text-lg font-semibold text-white mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Database className="text-[#6B4EFF]" size={20} />
-              Data Source Selection
-            </div>
-            {isSessionLocked && <span className="text-[10px] bg-[#6B4EFF]/20 text-[#6B4EFF] px-2 py-0.5 rounded border border-[#6B4EFF]/30 uppercase tracking-widest font-bold">Session Locked</span>}
-          </h2>
-
-          <div className="space-y-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">Select Dataset (.jsonl)</label>
-              <div className="relative">
-                <select
-                  className={cn(
-                    "w-full bg-[#1F2937] border border-[#374151] text-white pl-4 pr-10 py-2.5 rounded-lg appearance-none focus:outline-none focus:border-[#6B4EFF] transition-colors",
-                    isDataSelectionLocked && "bg-[#0D1117]"
-                  )}
-                  value={selectedDatasetId}
-                  onChange={(e) => setSelectedDatasetId(e.target.value)}
-                  disabled={isDataSelectionLocked}
-                >
-                  <option value="" disabled>Choose a dataset...</option>
-                  {datasets.map(ds => (
-                    <option key={ds.id} value={ds.id}>{ds.name} (uploaded {new Date(ds.createdAt).toLocaleDateString()})</option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
-              </div>
-              {selectedDataset && (
-                <div className="flex items-center gap-2 text-[10px] font-bold text-[#E0FF4F] uppercase tracking-widest bg-[#E0FF4F]/10 px-2 py-1 rounded border border-[#E0FF4F]/20 animate-in zoom-in duration-300">
-                  <CheckCircle2 size={12} />
-                  <span>GoEmotions Dataset Linked</span>
-                </div>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-400 mb-2">Margin of Error (Accuracy Tier)</label>
-              <div className="grid grid-cols-3 gap-3">
-                {['High', 'Standard', 'Low'].map((tier) => (
-                  <button
-                    key={tier}
-                    onClick={() => setAccuracy(tier)}
-                    disabled={isDataSelectionLocked}
-                    className={cn(
-                      "py-2 rounded-md text-sm font-medium border transition-colors",
-                      accuracy === tier
-                        ? 'bg-[#6B4EFF]/10 border-[#6B4EFF] text-[#6B4EFF]'
-                        : 'bg-[#1F2937] border-[#374151] text-gray-400 hover:text-white hover:border-gray-500',
-                      isDataSelectionLocked && accuracy !== tier && "opacity-30",
-                      isDataSelectionLocked && accuracy === tier && "cursor-default"
-                    )}
-                  >
-                    {tier}
-                    <span className="block text-xs opacity-70 mt-0.5">
-                      {tier === 'High' ? '(1%)' : tier === 'Standard' ? '(5%)' : '(10%)'}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <button
-              onClick={handleSample}
-              disabled={!selectedDatasetId || isSampling || isDataSelectionLocked}
-              className={cn(
-                "w-full px-4 py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all",
-                isSessionLocked
-                  ? "bg-[#1F2937] text-gray-500 border border-[#374151] cursor-default"
-                  : "bg-[#E0FF4F] hover:bg-[#d4f535] text-black btn-lift shadow-lg shadow-[#E0FF4F]/10 disabled:opacity-50"
-              )}
-            >
-              {isSampling ? 'Processing...' : isSessionLocked ? 'Sample Locked for Session' : 'Generate Sample Data'}
-            </button>
-          </div>
-        </div>
-
-        {/* Sampling Results Panel */}
-        <div className="bg-[#0D1117] border border-[#1F2937] rounded-xl p-6 flex flex-col justify-center relative overflow-hidden min-h-[320px]">
-          {!selectedDatasetId ? (
-            <div className="flex flex-col items-center justify-center text-center space-y-4 opacity-50">
-              <div className="w-16 h-16 rounded-full border border-dashed border-gray-500 flex items-center justify-center">
-                <BarChart3 className="text-gray-500" size={24} />
-              </div>
-              <div>
-                <p className="text-gray-400 text-sm">No dataset selected.</p>
-                <p className="text-gray-500 text-xs mt-1">Select a dataset and accuracy to see thresholds.</p>
-              </div>
-            </div>
-          ) : (
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col items-center text-center z-10">
-              <div className={cn(
-                "w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-colors",
-                sampledData ? "bg-[#E0FF4F]/10" : "bg-[#6B4EFF]/10"
-              )}>
-                {sampledData ? (
-                  <CheckCircle2 className="text-[#E0FF4F] w-8 h-8" />
-                ) : (
-                  <BarChart3 className="text-[#6B4EFF] w-8 h-8" />
-                )}
-              </div>
-
-              <h3 className="text-2xl font-bold text-white mb-2">Sample Size</h3>
-              <p className="text-gray-400 mb-8 max-w-sm">
-                Sample size is mathematically optimized to ensure a{' '}
-                <span className="text-[#6B4EFF] font-semibold">
-                  {accuracy === 'High' ? '1%' : accuracy === 'Standard' ? '5%' : '10%'}
-                </span>{' '}
-                margin of error across the entire population.
+            {/* Model Selection Basket */}
+            <div className="bg-[#0D1117] border border-[#1F2937] rounded-xl p-6 flex flex-col h-[480px]">
+              <h3 className="text-lg font-semibold text-white mb-2 flex items-center justify-between">
+                Model Candidate Pool
+                <span className={cn(
+                  "text-xs px-2 py-1 rounded font-semibold",
+                  selectedModels.length >= 2 && selectedModels.length <= 5
+                    ? "bg-[#E0FF4F]/20 text-[#E0FF4F]"
+                    : "bg-orange-500/20 text-orange-400"
+                )}>
+                  {selectedModels.length} / 5 Selected (Min 2)
+                </span>
+              </h3>
+              <p className="text-sm text-gray-400 mb-4">
+                Select between 2 to 5 foundational models to test your objective logic.
               </p>
 
-              <div className="w-full space-y-6">
-                <div className="grid grid-cols-2 gap-4 w-full">
-                  <div className="bg-[#1F2937] rounded-lg p-4 border border-[#374151]">
-                    <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Total Population</p>
-                    <p className="text-2xl font-mono text-white">
-                      {selectedDataset ? selectedDataset.recordCount.toLocaleString() : '...'}
-                    </p>
-                  </div>
-                  <div className="bg-[#1F2937] rounded-lg p-4 border border-[#6B4EFF]/30 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 w-16 h-16 bg-[#6B4EFF]/10 rounded-bl-full"></div>
-                    <p className="text-xs text-[#6B4EFF] uppercase tracking-wider mb-1 font-semibold">Sample Size</p>
-                    <p className="text-2xl font-mono text-white">
-                      {sampledData ? sampledData.sampleSize : Math.min(predictedSampleSize, selectedDataset?.recordCount ?? 0)}
-                    </p>
-                  </div>
-                </div>
+              <div className="relative mb-4">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Search models or providers..."
+                  className="w-full bg-[#1F2937] border border-[#374151] pl-10 pr-4 py-2 rounded-lg text-sm text-white focus:outline-none focus:border-[#6B4EFF]"
+                  onFocus={() => {
+                    if (isResetForDemo) {
+                      restoreField('selectedModels');
+                    }
+                  }}
+                  value={modelSearch}
+                  onChange={(e) => setModelSearch(e.target.value)}
+                  disabled={isSessionLocked}
+                />
+              </div>
 
-                {sampledData && (
-                  <div className="pt-4 animate-in fade-in zoom-in duration-700">
-                    <button
-                      onClick={handleRunDiscovery}
-                      disabled={configStatus !== 'COMPLETE' || runStatus === 'PENDING' || runStatus === 'RUNNING'}
-                      className={cn(
-                        "w-full py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-all duration-300 shadow-2xl overflow-hidden relative group",
-                        configStatus !== 'COMPLETE'
-                          ? "bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700"
-                          : runStatus === 'PENDING' || runStatus === 'RUNNING'
-                            ? "bg-[#6B4EFF]/20 text-[#6B4EFF] border border-[#6B4EFF]/30 cursor-wait"
-                            : runStatus === 'COMPLETE'
-                              ? "bg-green-500/10 text-green-400 border border-green-500/50"
-                              : "bg-[#E0FF4F] text-[#0D1117] hover:bg-[#d0f040] hover:scale-[1.02] active:scale-[0.98] shadow-[#E0FF4F]/20"
-                      )}
-                    >
-                      {runStatus === 'PENDING' || runStatus === 'RUNNING' ? (
-                        <>
-                          <Loader2 className="animate-spin" size={20} />
-                          <span className="uppercase tracking-widest text-sm">Engine Executing...</span>
-                          <div className="absolute bottom-0 left-0 h-1 bg-[#6B4EFF] animate-[shimmer_2s_infinite]"></div>
-                        </>
-                      ) : runStatus === 'COMPLETE' ? (
-                        <>
-                          <CheckCircle2 size={20} />
-                          <span className="uppercase tracking-widest text-sm">Baseline Established</span>
-                        </>
-                      ) : (
-                        <>
-                          <Play size={20} className="fill-current" />
-                          <span className="uppercase tracking-widest text-sm">Run Discovery Engine</span>
-                        </>
-                      )}
-                    </button>
+              <div className="flex-grow overflow-y-auto space-y-2 pr-2 custom-scrollbar border-t border-[#1F2937] pt-2 max-h-[400px]">
+                {isModelsLoading ? (
+                  // Loading Skeleton
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="w-full h-20 bg-[#1F2937] border border-[#374151] rounded-lg animate-pulse" />
+                  ))
+                ) : (
+                  filteredModels.map(model => {
+                    const isSelected = selectedModels.includes(model.id);
+                    const isDisabled = isSessionLocked || (!isSelected && selectedModels.length >= 5);
 
-                    {configStatus !== 'COMPLETE' && (
-                      <p className="text-[10px] text-gray-500 uppercase tracking-tighter mt-2 font-mono">
-                        Configure 2-5 models and Master Prompt to unlock Engine
-                      </p>
-                    )}
-                  </div>
+                    return (
+                      <button
+                        key={model.id}
+                        onClick={() => toggleModel(model.id)}
+                        disabled={isDisabled}
+                        className={cn(
+                          "w-full flex items-center justify-between p-3 rounded-lg border text-left transition-all relative overflow-hidden",
+                          isSelected
+                            ? "bg-[#6B4EFF]/10 border-[#6B4EFF] shadow-sm shadow-[#6B4EFF]/10"
+                            : "bg-[#1F2937] border-[#374151] hover:border-gray-600",
+                          isDisabled && !isSelected && "opacity-50 cursor-not-allowed"
+                        )}
+                      >
+                        <div className="flex-grow">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-white">{model.name}</span>
+                            {model.isFast ? (
+                              <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-[#6B4EFF]/20 text-[#6B4EFF] border border-[#6B4EFF]/30">Fast</span>
+                            ) : (
+                              <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-gray-500/10 text-gray-400 border border-gray-500/20">Base</span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-gray-500 mt-0.5 font-medium">
+                            {model.provider} &middot; {model.type}
+                          </div>
+                          <div className="flex gap-3 mt-2 font-mono text-[10px]">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-gray-500">In:</span>
+                              <span className="text-[#E0FF4F]">${(model.priceIn || 0).toFixed(2)}/1M</span>
+                            </div>
+                            {model.priceOut !== undefined && model.priceOut > 0 && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-gray-500">Out:</span>
+                                <span className="text-[#6B4EFF]">${(model.priceOut || 0).toFixed(2)}/1M</span>
+                              </div>
+                            )}
+                            {model.context_window !== undefined && model.context_window > 0 && (
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-gray-500">Ctx:</span>
+                                <span className="text-gray-300">{Math.round((model.context_window || 0) / 1024)}k</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        {isSelected && <CheckCircle2 className="text-[#E0FF4F]" size={18} />}
+                      </button>
+                    );
+                  })
+                )}
+                {!isModelsLoading && filteredModels.length === 0 && (
+                  <div className="text-center text-sm text-gray-500 py-4">No models found matching &quot;{modelSearch}&quot;</div>
                 )}
               </div>
             </div>
-          )}
+          </div>
+
+          {/* Main Content Area: Data Selection */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+
+            {/* Source Selection Panel */}
+            <div className={cn(
+              "bg-[#0D1117] border border-[#1F2937] rounded-xl p-6 transition-opacity relative",
+              isDataSelectionLocked && "opacity-60 pointer-events-none cursor-not-allowed"
+            )}>
+              {/* Overlay for Draft Config Status */}
+              {configStatus === 'DRAFT' && !isSessionLocked && (
+                <div className="absolute inset-0 z-10 bg-[#0D1117]/60 backdrop-blur-[2px] rounded-xl flex items-center justify-center pointer-events-auto">
+                  <div className="bg-[#1F2937] border border-[#374151] px-6 py-4 rounded-lg text-center shadow-xl max-w-[280px]">
+                    <Settings className="text-[#6B4EFF] mx-auto mb-2" size={24} />
+                    <p className="text-white font-medium text-sm">Configuration Incomplete</p>
+                    <p className="text-xs text-gray-400 mt-1">Provide a Master System Prompt and select 2-5 model candidates to unlock.</p>
+                  </div>
+                </div>
+              )}
+
+              <h2 className="text-lg font-semibold text-white mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Database className="text-[#6B4EFF]" size={20} />
+                  Data Source Selection
+                </div>
+                {isSessionLocked && <span className="text-[10px] bg-[#6B4EFF]/20 text-[#6B4EFF] px-2 py-0.5 rounded border border-[#6B4EFF]/30 uppercase tracking-widest font-bold">Session Locked</span>}
+              </h2>
+
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">Select Dataset (.jsonl)</label>
+                  <div className="relative">
+                    <select
+                      className={cn(
+                        "w-full bg-[#1F2937] border border-[#374151] text-white pl-4 pr-10 py-2.5 rounded-lg appearance-none focus:outline-none focus:border-[#6B4EFF] transition-colors",
+                        isDataSelectionLocked && "bg-[#0D1117]"
+                      )}
+                      value={selectedDatasetId}
+                      onChange={(e) => setSelectedDatasetId(e.target.value)}
+                      disabled={isDataSelectionLocked}
+                    >
+                      <option value="" disabled>Choose a dataset...</option>
+                      {datasets.map(ds => (
+                        <option key={ds.id} value={ds.id}>{ds.name} (uploaded {new Date(ds.createdAt).toLocaleDateString()})</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={16} />
+                  </div>
+                  {selectedDataset && (
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-[#E0FF4F] uppercase tracking-widest bg-[#E0FF4F]/10 px-2 py-1 rounded border border-[#E0FF4F]/20 animate-in zoom-in duration-300">
+                      <CheckCircle2 size={12} />
+                      <span>GoEmotions Dataset Linked</span>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-2">Margin of Error (Accuracy Tier)</label>
+                  <div className="grid grid-cols-3 gap-3">
+                    {['High', 'Standard', 'Low'].map((tier) => (
+                      <button
+                        key={tier}
+                        onClick={() => setAccuracy(tier)}
+                        disabled={isDataSelectionLocked}
+                        className={cn(
+                          "py-2 rounded-md text-sm font-medium border transition-colors",
+                          accuracy === tier
+                            ? 'bg-[#6B4EFF]/10 border-[#6B4EFF] text-[#6B4EFF]'
+                            : 'bg-[#1F2937] border-[#374151] text-gray-400 hover:text-white hover:border-gray-500',
+                          isDataSelectionLocked && accuracy !== tier && "opacity-30",
+                          isDataSelectionLocked && accuracy === tier && "cursor-default"
+                        )}
+                      >
+                        {tier}
+                        <span className="block text-xs opacity-70 mt-0.5">
+                          {tier === 'High' ? '(1%)' : tier === 'Standard' ? '(5%)' : '(10%)'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleSample}
+                  disabled={!selectedDatasetId || isSampling || isDataSelectionLocked}
+                  className={cn(
+                    "w-full px-4 py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all",
+                    isSessionLocked
+                      ? "bg-[#1F2937] text-gray-500 border border-[#374151] cursor-default"
+                      : "bg-[#E0FF4F] hover:bg-[#d4f535] text-black btn-lift shadow-lg shadow-[#E0FF4F]/10 disabled:opacity-50"
+                  )}
+                >
+                  {isSampling ? 'Processing...' : isSessionLocked ? 'Sample Locked for Session' : 'Generate Sample Data'}
+                </button>
+              </div>
+            </div>
+
+            {/* Sampling Results Panel */}
+            <div className="bg-[#0D1117] border border-[#1F2937] rounded-xl p-6 flex flex-col justify-center relative overflow-hidden min-h-[320px]">
+              {!selectedDatasetId ? (
+                <div className="flex flex-col items-center justify-center text-center space-y-4 opacity-50">
+                  <div className="w-16 h-16 rounded-full border border-dashed border-gray-500 flex items-center justify-center">
+                    <BarChart3 className="text-gray-500" size={24} />
+                  </div>
+                  <div>
+                    <p className="text-gray-400 text-sm">No dataset selected.</p>
+                    <p className="text-gray-500 text-xs mt-1">Select a dataset and accuracy to see thresholds.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex flex-col items-center text-center z-10">
+                  <div className={cn(
+                    "w-16 h-16 rounded-full flex items-center justify-center mb-4 transition-colors",
+                    sampledData ? "bg-[#E0FF4F]/10" : "bg-[#6B4EFF]/10"
+                  )}>
+                    {sampledData ? (
+                      <CheckCircle2 className="text-[#E0FF4F] w-8 h-8" />
+                    ) : (
+                      <BarChart3 className="text-[#6B4EFF] w-8 h-8" />
+                    )}
+                  </div>
+
+                  <h3 className="text-2xl font-bold text-white mb-2">Sample Size</h3>
+                  <p className="text-gray-400 mb-8 max-w-sm">
+                    Sample size is mathematically optimized to ensure a{' '}
+                    <span className="text-[#6B4EFF] font-semibold">
+                      {accuracy === 'High' ? '1%' : accuracy === 'Standard' ? '5%' : '10%'}
+                    </span>{' '}
+                    margin of error across the entire population.
+                  </p>
+
+                  <div className="w-full space-y-6">
+                    <div className="grid grid-cols-2 gap-4 w-full">
+                      <div className="bg-[#1F2937] rounded-lg p-4 border border-[#374151]">
+                        <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Total Population</p>
+                        <p className="text-2xl font-mono text-white">
+                          {selectedDataset ? selectedDataset.recordCount.toLocaleString() : '...'}
+                        </p>
+                      </div>
+                      <div className="bg-[#1F2937] rounded-lg p-4 border border-[#6B4EFF]/30 relative overflow-hidden">
+                        <div className="absolute top-0 right-0 w-16 h-16 bg-[#6B4EFF]/10 rounded-bl-full"></div>
+                        <p className="text-xs text-[#6B4EFF] uppercase tracking-wider mb-1 font-semibold">Sample Size</p>
+                        <p className="text-2xl font-mono text-white">
+                          {sampledData ? sampledData.sampleSize : Math.min(predictedSampleSize, selectedDataset?.recordCount ?? 0)}
+                        </p>
+                      </div>
+                    </div>
+
+                    {sampledData && (
+                      <div className="pt-4 animate-in fade-in zoom-in duration-700">
+                        <button
+                          onClick={handleRunDiscovery}
+                          disabled={configStatus !== 'COMPLETE' || runStatus === 'PENDING' || runStatus === 'RUNNING'}
+                          className={cn(
+                            "w-full py-4 rounded-xl font-bold flex items-center justify-center gap-3 transition-all duration-300 shadow-2xl overflow-hidden relative group",
+                            configStatus !== 'COMPLETE'
+                              ? "bg-gray-800 text-gray-500 cursor-not-allowed border border-gray-700"
+                              : runStatus === 'PENDING' || runStatus === 'RUNNING'
+                                ? "bg-[#6B4EFF]/20 text-[#6B4EFF] border border-[#6B4EFF]/30 cursor-wait"
+                                : runStatus === 'COMPLETE'
+                                  ? "bg-green-500/10 text-green-400 border border-green-500/50"
+                                  : "bg-[#E0FF4F] text-[#0D1117] hover:bg-[#d0f040] hover:scale-[1.02] active:scale-[0.98] shadow-[#E0FF4F]/20"
+                          )}
+                        >
+                          {runStatus === 'PENDING' || runStatus === 'RUNNING' ? (
+                            <>
+                              <Loader2 className="animate-spin" size={20} />
+                              <span className="uppercase tracking-widest text-sm">Engine Executing...</span>
+                              <div className="absolute bottom-0 left-0 h-1 bg-[#6B4EFF] animate-[shimmer_2s_infinite]"></div>
+                            </>
+                          ) : runStatus === 'COMPLETE' ? (
+                            <>
+                              <CheckCircle2 size={20} />
+                              <span className="uppercase tracking-widest text-sm">Baseline Established</span>
+                            </>
+                          ) : (
+                            <>
+                              <Play size={20} className="fill-current" />
+                              <span className="uppercase tracking-widest text-sm">Run Discovery Engine</span>
+                            </>
+                          )}
+                        </button>
+
+                        {configStatus !== 'COMPLETE' && (
+                          <p className="text-[10px] text-gray-500 uppercase tracking-tighter mt-2 font-mono">
+                            Configure 2-5 models and Master Prompt to unlock Engine
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
         </div>
       </div>
 
