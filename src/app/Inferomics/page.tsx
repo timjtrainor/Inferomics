@@ -898,7 +898,7 @@ function InferomicsContent() {
                       : "bg-[#E0FF4F] hover:bg-[#d4f535] text-black btn-lift shadow-lg shadow-[#E0FF4F]/10 disabled:opacity-50"
                   )}
                 >
-                  {isSampling ? 'Processing...' : isSessionLocked ? 'Sample Locked for Session' : 'Generate Sample Data'}
+                  {isSampling ? 'Processing...' : isSessionLocked ? 'Test Data Locked for Session' : 'Generate Test Data'}
                 </button>
               </div>
             </div>
@@ -928,9 +928,9 @@ function InferomicsContent() {
                     )}
                   </div>
 
-                  <h3 className="text-2xl font-bold text-white mb-2">Sample Size</h3>
+                  <h3 className="text-2xl font-bold text-white mb-2">Test Size</h3>
                   <p className="text-gray-400 mb-8 max-w-sm">
-                    Sample size is mathematically optimized to ensure a{' '}
+                    Test size is mathematically optimized to ensure a{' '}
                     <span className="text-[#6B4EFF] font-semibold">
                       {accuracy === 'High' ? '1%' : accuracy === 'Standard' ? '5%' : '10%'}
                     </span>{' '}
@@ -947,7 +947,7 @@ function InferomicsContent() {
                       </div>
                       <div className="bg-[#1F2937] rounded-lg p-4 border border-[#6B4EFF]/30 relative overflow-hidden">
                         <div className="absolute top-0 right-0 w-16 h-16 bg-[#6B4EFF]/10 rounded-bl-full"></div>
-                        <p className="text-xs text-[#6B4EFF] uppercase tracking-wider mb-1 font-semibold">Sample Size</p>
+                        <p className="text-xs text-[#6B4EFF] uppercase tracking-wider mb-1 font-semibold">Test Size</p>
                         <p className="text-2xl font-mono text-white">
                           {sampledData ? sampledData.sampleSize : Math.min(predictedSampleSize, selectedDataset?.recordCount ?? 0)}
                         </p>
